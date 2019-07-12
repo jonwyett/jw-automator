@@ -1,6 +1,10 @@
 var amtr = require('./automator');
 
-var auto = new amtr.automator({save: false, debug: true});
+var auto = new amtr.automator({save: false});
+
+auto.on('debug', function(msg) {
+    console.log('AUTOMATOR: ' + msg);
+});
 
 auto.on('ready', function() {
     console.log('Automator ready');

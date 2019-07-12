@@ -13,7 +13,6 @@ var fs = require('fs'); //for saving state
  * @param {Object} [options] - startup options  
  * @param {Boolean} [options.save] - Should the automator save it's state
  * @param {String} [options.saveFile] - alternate path/file for save
- * @param {Boolean} [options.debug] - see debug output
  */
 function automator(options) {
     var _self = this;
@@ -38,9 +37,7 @@ function automator(options) {
     //var _autoTimer = null;
 
     function debug(msg) {
-        if (options.debug) {
-            console.log('AUTOMATOR:' + msg);
-        }
+        emit('debug', msg);
     }
 
     (function startUp() {
