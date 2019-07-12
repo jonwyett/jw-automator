@@ -1,0 +1,19 @@
+{
+  "name": "jw-automator",
+  "version": "1.0.0",
+  "description": "Run various functions at proscribed intervals",
+  "main": "automator.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jonwyett/jw-automator.git"
+  },
+  "author": "Jonathan Wyett",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/jonwyett/jw-automator/issues"
+  },
+  "homepage": "https://github.com/jonwyett/jw-automator#readme"
+}
