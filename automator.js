@@ -1,6 +1,7 @@
 /*
+ver 1.0.1 19-07-18
+    -bug-fixes, 1.0.0 was actually non-functional...
 ver 1.0.0 19-06-27
-
 */
 
 'use strict';
@@ -10,22 +11,23 @@ var fs = require('fs'); //for saving state
 /**
  * Creates an automator
  * 
- * @param {Object} [options] - startup options  
+ * @param {object} [options] - startup options  
  * @param {Boolean} [options.save] - Should the automator save it's state
- * @param {String} [options.saveFile] - alternate path/file for save
+ * @param {string} [options.saveFile] - alternate path/file for save
  */
 function automator(options) {
+    if (typeof options === 'undefined') { options = {}; }
     var _self = this;
-    
+
     var _actions = []; //The actions to be automated
     var _functions = {}; //the functions that the automator can run
     var _saveFile = '.actions.json'; //default save path
-    var _saveState = false;
+    var _saveState = true;
     var _lastTickTime = Date.now(); //this works with action.unBuffered to prevent actions from being missed
     var _newTickTime = Date.now();
 
     if (options.saveFile) { _saveFile = options.saveFile; }
-    if (options.save) { _saveState = true; }
+    if (!options.save) { _saveState = false; }
 
     //The timer always runs but it may be muted, i.e. will execute no actions, they
     //will however have their counters updated as if they were being run and will be
@@ -36,11 +38,25 @@ function automator(options) {
     //holds the timer reference
     //var _autoTimer = null;
 
+    /*******************   Custom Emitter Code  **************************************************/
+    //this is for potential browser compatibility
+    var _events = {};
+    this.on = function(event, callback) {
+        //attaches a callback function to an event
+        _events[event] = callback;    
+    };
+    function emit(event, payload) {
+        if (typeof _events[event] === 'function') { //the client has registered the event
+            _events[event](payload); //run the event function provided
+        }   
+    }
+    /*******************************************************************************************/
+
     function debug(msg) {
-        emit('debug', msg);
+        emit('debug', msg); 
     }
 
-    (function startUp() {
+    function startUp() {
         //first load the actions from file.
         //we're going to do this in sync mode because we want to guarantee that the file is loaded
         //before we start the automator and possibly accept a new action that is then overwritten
@@ -48,6 +64,7 @@ function automator(options) {
         if (_saveState) {
             try {
                 _actions = JSON.parse(fs.readFileSync(_saveFile, 'utf8'));
+                debug('Loaded save file');
             } catch (err) {
                 debug('Save file does not exist yet.');
             }
@@ -57,12 +74,10 @@ function automator(options) {
         var wait = 1000 - new Date(Date.now()).getMilliseconds(); 
         debug('Waiting ' + wait + ' milliseconds...');
         setTimeout(function() {
-            debug('Automator Starting...');
-            tick();
-            //run the startup callback after the automator has actually started
             emit('ready');
+            tick();
         }, wait);  
-    })();
+    }
 
     function tick() {
         _lastTickTime = _newTickTime;
@@ -170,6 +185,7 @@ function automator(options) {
                 //while the next action date is still in the past, increment it until it isn't
                 //the action count will increase as if the action was run, but the action will not execute
                 actionsUpdated = true; //something has changed, in this case the date of at least one action.
+    
                 //the false flag will keep the action from running, but will update it's timing
                 //update the action, but don't run it's command, do increment its counter
                 var run = false;
@@ -365,26 +381,33 @@ function automator(options) {
 
     /*******************   Public functions  **************************************************/
 
-
-
-
+    /**
+     * Start the Automator
+     */
+    this.start = function() {
+        startUp();
+    };
 
     /**
      * Add an action to the automator
-     * @param {Object} action
-     * @param {String} action.name - Name of the action
-     * @param {String|Object} [action.date] - The start time. Blank for now
-     * @param {String} [action.cmd] - The name of the function (from addFunction)
-     * @param {String} [action.payload] - The param to pass to the cmd (use JSON for multi-var)
-     * @param {Object} [action.repeat] - Define how the action should repeat
+     * @param {object} action
+     * @param {string} action.name - Name of the action
+     * @param {string|object} [action.date] - The start time. Blank for now
+     * @param {string} [action.cmd] - The name of the function (from addFunction)
+     * @param {string} [action.payload] - The param to pass to the cmd (use JSON for multi-var)
+     * @param {boolean} [action.unBuffered] - If true actions missed due to delays will be skipped
+     * @param {object} [action.repeat] - Define how the action should repeat
      * @param {'second'|'minute'|'hour'|'day'|'week'|'month'|'year'|'weekday'|'weekend'} [action.repeat.type] - How should the action repeat
-     * @param {Number} [action.repeat.interval] - 3 means run every 3rd interval, etc...
-     * @param {Number} [action.repeat.count] - Usually not needed, how many times the action has already run
-     * @param {Number} [action.repeat.limit] - Total number of times to run
-     * @param {String} [action.repeat.endDate] - The date/time to remove the action
+     * @param {number} [action.repeat.interval] - 3 means run every 3rd interval, etc...
+     * @param {number} [action.repeat.count] - Usually not needed, how many times the action has already run
+     * @param {number|boolean} [action.repeat.limit] - Total number of times to run
+     * @param {string} [action.repeat.endDate] - The date/time to remove the action
      */
     this.addAction = function(action) {
-        if (!action.date) { action.date = Date.now(); }
+        if (!action.date) { 
+            action.date = new Date();
+            action.date.setSeconds(action.date.getSeconds() + 1 );
+        }
         /* should we allow undefined actions? Maybe yes for calendar entry support....
         if (!action.cmd) { 
             emit('error','No action cmd provided');
@@ -406,6 +429,8 @@ function automator(options) {
         if (_saveState) { saveActions(_actions); }//save the new actions to a file
 
         //run the newly added action if its first tick is now
+        //actually, don't. This causes more problems then it solves and the need is minimal
+        /*
         if (dateToMilliseconds(action.date) === dateToMilliseconds(clearMilliSeconds(Date.now()))) {
             action = executeAction(action, true);
             //emit a list of just this one action being run to the client
@@ -418,12 +443,14 @@ function automator(options) {
                         date: clearMilliSeconds(Date.now())
                     }
                 ]
-            ); 
+            );    
         } 
+        */
+       
     };
 
     /**
-     * @returns {Object} - A copy of the automator actions
+     * @returns {object} - A copy of the automator actions
      */
     this.getActions = function() {
         //return a copy not the actual object
@@ -432,7 +459,7 @@ function automator(options) {
     
     /**
      * Add a function to the automator
-     * @param {String} name - Common name for the function
+     * @param {string} name - Common name for the function
      * @param {Function} cmd - The function
      */
     this.addFunction = function(name, cmd) {
@@ -445,7 +472,7 @@ function automator(options) {
 
     /**
      * Remove an action by it's ID
-     * @param {Number|String} ID - The ID of the action
+     * @param {Number|string} ID - The ID of the action
      */
     this.removeActionByID = function(ID) {
         //removes an action from the list based on the ActionID
@@ -466,7 +493,7 @@ function automator(options) {
 
     /**
      * Remove an action by it's name
-     * @param {String} name - The name of the action
+     * @param {string} name - The name of the action
      */
     this.removeActionByName = function(name) {
         //removes an action from the list based on the action name
@@ -488,7 +515,7 @@ function automator(options) {
 
     /**
      * Execute an action by it's ID
-     * @param {Number|String} ID - The action ID
+     * @param {Number|string} ID - The action ID
      * @param {Boolean} increment - Should this execution count towards the action's total
      * 
      * @returns {Boolean} - Did the action(s) run
@@ -519,7 +546,7 @@ function automator(options) {
 
     /**
      * Execute an action by it's name
-     * @param {String} name - The action name
+     * @param {string} name - The action name
      * @param {Boolean} increment - Should this execution count towards the action's total
      * 
      * @returns {Boolean} - Did the action run?
@@ -561,8 +588,8 @@ function automator(options) {
 
     /**
      * This is for simulation/debugging or for showing upcoming actions on a calendar.
-     * @param {String|Date} start - Start date
-     * @param {String|Date} end - End date
+     * @param {string|Date} start - Start date
+     * @param {string|Date} end - End date
      * @param {Function} [callback] - Array of scheduled actions within the specified date range
      */
     this.GetActionsInRange = function(start, end, callback) {
@@ -606,8 +633,8 @@ function automator(options) {
 
     /**
      * Updates an action by it's name
-     * @param {String} name - Name of the action
-     * @param {Object} newAction - The modified action object
+     * @param {string} name - Name of the action
+     * @param {object} newAction - The modified action object
      */
     this.updateActionByName = function(name, newAction) {
         for (var i=0; i<_actions.length; i++) {
@@ -619,8 +646,8 @@ function automator(options) {
 
     /**
      * Updates an action by it's ID
-     * @param {String} ID - ID of the action
-     * @param {Object} newAction - The modified action object
+     * @param {string} ID - ID of the action
+     * @param {object} newAction - The modified action object
      */
     this.updateActionByID = function(ID, newAction) {
         for (var i=0; i<_actions.length; i++) {
@@ -628,27 +655,7 @@ function automator(options) {
                 updateAction(_actions[i], newAction);
             }
         }
-    };
-
-
-
-
-
-
-
-    /*******************   Custom Emitter Code  **************************************************/
-    //this is for potential browser compatibility
-    var _events = {};
-    this.on = function(event, callback) {
-        //attaches a callback function to an event
-        _events[event] = callback;    
-    };
-    function emit(event, payload) {
-        if (typeof _events[event] === 'function') { //the client has registered the event
-            _events[event](payload); //run the event function provided
-        }   
-    }
-    /*******************************************************************************************/
+    };    
 }
 
 exports.automator = automator;
@@ -672,7 +679,7 @@ var action = {
         type:'minute', // second/minute/hour/day/week/month/year/weekday/weekend
         interval: 1, //how many of the type to skip, 3=every 3rd type
         count: 0, //number of times the action has run, 0=hasn't run yet
-        limit: false, //number of times the action should run, false means don't limit
+        limit: null, //number of times the action should run, false means don't limit
         endDate: null //null = no end date
     }
 };

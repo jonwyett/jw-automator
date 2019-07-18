@@ -1,6 +1,6 @@
 {
   "name": "jw-automator",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Run various functions at proscribed intervals",
   "main": "automator.js",
   "scripts": {
