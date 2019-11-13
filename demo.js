@@ -40,13 +40,13 @@ automator.addFunction('test', function(msg) {
 
 automator.addAction({
         name: 'sec', //user definable
-        date: null, //next time the action should run, set default immediately
+        date: null, //next time the action should run (UTC), set default immediately 
         cmd: 'test', //cmd to call
         payload: 'tick', //payload to send to cmd
         unBuffered: null, //when true actions missed due to sync delay will be skipped
         repeat: { //set this to null to only run the action once, alternatively set limit to 1
             type:'second', // second/minute/hour/day/week/month/year/weekday/weekend
-            interval: 1, //how many of the type to skip, 3=every 3rd type
+            interval: 1, //how many of the type to skip, 2=every other time
             count: 0, //number of times the action has run, 0=hasn't run yet
             limit: null, //number of times the action should run, false means don't limit
             endDate: null //null = no end date
@@ -57,7 +57,7 @@ automator.addAction({
 //create an action that fires every 4 seconds, and stops after it's run 4 times
 automator.addAction({
     name: '4sec', //user definable
-    date: null, //next time the action should run, set default immediately
+    date: null, //next time the action should run (UTC), set default immediately
     cmd: 'test', //cmd to call
     payload: '********4 seconds********', //payload to send to cmd
     unBuffered: null, //when true actions missed due to sync delay will be skipped
