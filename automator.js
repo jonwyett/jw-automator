@@ -1,4 +1,6 @@
 /*
+ver 1.0.2 19-11-13
+    -fixed DST-Standard time changeover bug
 ver 1.0.1 19-07-18
     -bug-fixes, 1.0.0 was actually non-functional...
 ver 1.0.0 19-06-27
