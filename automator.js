@@ -182,6 +182,7 @@ function automator(options) {
             //pre-set the dateOld test for the while loop
             dateOld = dateToMilliseconds(actions[i].date) < dateToMilliseconds(now); //true if in the past 
             while (dateOld) {
+                //debug('date is in the past: ' + actions[i].date); 
                 //while the next action date is still in the past, increment it until it isn't
                 //the action count will increase as if the action was run, but the action will not execute
                 actionsUpdated = true; //something has changed, in this case the date of at least one action.
@@ -282,7 +283,12 @@ function automator(options) {
         if (typeof repeat === 'undefined') { return new Date(start); }
     
         var dateStart = new Date(start); //convert input to valid date object
-        dateStart.setMilliseconds(0); //since the minimum tick is 1 second;
+        
+        //the following call breaks the DST->Standard time crossover, so for now don't do it
+        //potentially if a user sets an action start time and includes milliseconds it might
+        //break the action, not sure
+        //dateStart.setMilliseconds(0); //since the minimum tick is 1 second;
+
         start = Date.parse(dateStart.toString()); //convert to milliseconds
         var nextTime = null; //by default there will be no next action time
         var inc = 0; //the number of milliseconds to increment by
@@ -352,7 +358,6 @@ function automator(options) {
         }
     
         nextTime = new Date(start + inc); 
-        
         return nextTime; //returns a date object
     }
 
