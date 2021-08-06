@@ -1,4 +1,6 @@
 /*
+ver 2.0.0 21-08-02
+    -rename GetActionsByName to getActionsInRange (BREAKING CHANGE)
 ver 1.0.2 19-11-13
     -fixed DST-Standard time changeover bug
 ver 1.0.1 19-07-18
@@ -599,7 +601,7 @@ function automator(options) {
      * @param {string|Date} end - End date
      * @param {Function} [callback] - Array of scheduled actions within the specified date range
      */
-    this.GetActionsInRange = function(start, end, callback) {
+    this.getActionsInRange = function(start, end, callback) {
         //returns an array of scheduled actions within the specified date range.
         //This is for simulation or for showing upcoming actions on a calendar.
         
