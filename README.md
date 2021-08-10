@@ -54,31 +54,31 @@ Default = '.actions.json'
 
 ## Public Functions ##  
 
-__start__  
+__start()__  
 Starts the Automator   
 
 ---
 
-__getActions__  
+__getActions()__  
 Returns a listing of the current actions and their states  
 
 ---
 
-__removeActionByID__  
+__removeActionByID(ID)__  
 Removes an action by the internal ID. You must use getActions() to determine the ID.  
 _params_
 1. ID _number_: The ID number for the action
 
 ---
 
-__removeActionByName__  
+__removeActionByName(name)__  
 Removes an action by the name you provided in the .name option when you created it.  
 _params_  
 1. name _string_: The action name  
 
 ---
 
-__executeActionByID__  
+__executeActionByID(ID, increment)__  
 Forces a given action to run immediately.  
 _params_  
 1. ID _number_: the action ID  
@@ -86,7 +86,7 @@ _params_
 
 ---
 
-__executeActionByName__  
+__executeActionByName(name, increment)__  
 Forces a given action to run immediately.  
 _params_  
 1. name _string_: the action name
@@ -94,7 +94,7 @@ _params_
 
 ---
 
-__getActionsInRange__  
+__getActionsInRange(start, end, callback)__  
 Generates an array of all the action objects that would run during a particular range of time. Every time an action will run will have an index in an array. This is useful if you're using the automator as the backend of a calendaring system and you want to display everything that will happen in a period of time, like for a week/month calendar display. Because actions can be set to repeat for a given limit or until a given date has occurred, the only way to generate this information is to simulate the actions and see what happens, as such it may take a few CPU cycles to generate the information. Therefore, this routine runs asynchronously and a callback must be used to retrieve the result.  
 _params_  
 1. start _Date_: the date/time to start the range  
@@ -103,7 +103,7 @@ _params_
 
 ---
 
-__updateActionByID__  
+__updateActionByID(ID, newAction)__  
 Updates an action by it's ID. Use to change an action in some way, like to modify it's interval or end date, etc.  
 _params_  
 1. ID _number_: the action ID  
@@ -111,7 +111,7 @@ _params_
 
 ---
 
-__updateActionByName__  
+__updateActionByName(name, newAction)__  
 Updates an action by it's name. Use to change an action in some way, like to modify it's interval or end date, etc.  
 _params_  
 1. name _string_: the action name  
@@ -119,7 +119,7 @@ _params_
 
 ---
 
-__addAction__  
+__addAction(action)__  
 Adds a new action to the automator.  
 _params:_
 1. action _object_: The action object, see below for details.
