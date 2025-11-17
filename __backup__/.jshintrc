@@ -1,0 +1,16 @@
+{
+    "multistr": true,
+    "undef": true,
+    "unused": false,
+    "validthis": true,
+    "node": true,
+    "loopfunc": true,
+    "globals": {
+        "$": true,
+        "document": true,
+        "jQuery": true,
+        "window": true,
+        "jwf": true,
+        "performance": true
+    }
+}

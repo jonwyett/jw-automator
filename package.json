@@ -1,19 +1,45 @@
 {
   "name": "jw-automator",
   "version": "2.0.0",
-  "description": "Run various functions at proscribed intervals",
-  "main": "automator.js",
+  "description": "A resilient, local-time, 1-second precision automation scheduler for Node.js",
+  "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
   },
+  "keywords": [
+    "scheduler",
+    "automation",
+    "cron",
+    "task",
+    "timer",
+    "schedule",
+    "local-time",
+    "dst",
+    "recurrence",
+    "iot",
+    "raspberry-pi",
+    "home-automation"
+  ],
+  "author": "Jon Wyett",
+  "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/jonwyett/jw-automator.git"
+    "url": "https://github.com/jonwyett/jw-automator.git"
   },
-  "author": "Jonathan Wyett",
-  "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/jonwyett/jw-automator/issues"
+  "engines": {
+    "node": ">=12.0.0"
   },
-  "homepage": "https://github.com/jonwyett/jw-automator#readme"
+  "devDependencies": {
+    "jest": "^29.0.0"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "coverageDirectory": "coverage",
+    "collectCoverageFrom": [
+      "src/**/*.js",
+      "!src/**/*.test.js"
+    ]
+  }
 }

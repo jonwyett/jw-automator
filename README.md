@@ -1,278 +1,452 @@
-# jw-automator
+# 📚 **jw-automator v2**
 
-Package for automating events. Designed for automating IoT devices, such as logging the temperature every 15 minutes, or turning lights on/off at certain times, but could also be used as a full calendaring system or to schedule anything else you might need to happen at certain times.  
+### A resilient, local-time, 1-second precision automation scheduler for Node.js
 
-Because of it's intended use, the minimum interval is 1 second. If you need to automate something that runs more often then that you should probably just use the native __setInterval()__ function. That being said there is a way to leverage the extra features of jw-automator for millisecond-interval level events, which will be discussed later in the readme.  
+**Human-friendly recurrence rules. Offline catch-up. DST-safe. Predictable. Extensible.**
 
-## Basic Usage ##  
-``` javascript
-    //Import the library
-    var Auto = require('jw-automator'); 
+---
 
-    //Create the automator
-    var automator = new Auto.automator();
+## ⭐️ Overview
 
-    //add a function that takes a simple payload (you can only use a single param)
-    automator.addFunction('testFunc', (msg) => {
-        console.log('Automator says: ' + msg);
-    });
+**jw-automator** is a robust automation engine designed for small devices, home automation hubs, personal servers, and Node.js environments where **correctness, resilience, and local-time behavior** matter more than millisecond precision.
 
-    //Add an action to the automator 
-    automator.addAction({
-        name: 'hello', //The name of this action
-        cmd: 'testFunc', //cmd to call
-        payload: 'Hello World', //payload to send to cmd
-        repeat: { //if you don't provide the repeat param the action will only run once, immediately
-            type:'second', // second/minute/hour/day/week/month/year/weekday/weekend
-            interval: 5, //how many of the type to skip, 2=every other time
-        }
+Where traditional cron falls short — missed executions, poor DST handling, limited recurrence, lack of catch-up semantics — **jw-automator** provides a predictable, human-centric scheduling model:
+
+* **1-second granularity** with zero drift
+* **Local calendar semantics** (weekday/weekend, monthly, yearly)
+* **Configurable DST policies** (fall-back once/twice)
+* **Offline resiliency & catch-up logic**
+* **Buffered/unBuffered execution policies**
+* **Rich introspection and event lifecycle**
+* **Meta-actions** that can dynamically create/update other actions
+* **Pluggable persistence** (file, memory, custom storage)
+* **Deterministic step engine** suitable for simulation/testing
+
+This makes jw-automator ideal for:
+
+* Small Raspberry Pi home automation hubs
+* IoT applications
+* Sensor sampling / periodic readings
+* Daily/weekly routines
+* "Smart home" orchestrations
+* Systems that must *survive restarts, reboots, offline gaps, and DST transitions*
+
+jw-automator v2 is a **clean-room re-architecture** of the original library, keeping its best ideas while formalizing its semantics, improving correctness, and providing a crisp developer experience.
+
+---
+
+## 🚀 Quick Start
+
+### Installation
+
+```bash
+npm install jw-automator
+```
+
+### Basic Usage
+
+```js
+const Automator = require('jw-automator');
+
+// Create an automator with file-based persistence
+const automator = new Automator({
+  storage: Automator.storage.file('./actions.json')
+});
+
+// Register a command function
+automator.addFunction('turnLightOn', function(payload) {
+  console.log('Turning light on');
+});
+
+// Add an action
+automator.addAction({
+  name: 'Morning Lights',
+  cmd: 'turnLightOn',
+  date: new Date('2025-05-01T07:00:00'),
+  payload: null,
+  unBuffered: false,
+  repeat: {
+    type: 'day',
+    interval: 1,
+    limit: null,
+    endDate: null,
+    dstPolicy: 'once'
+  }
+});
+
+// Start the scheduler
+automator.start();
+```
+
+---
+
+## 🔥 Features
+
+### 1. **True 1-Second Precision**
+
+* Scheduler tick interval is fixed at **1 second**.
+* Execution times are aligned to the nearest whole second.
+* No promise of sub-second timing (by design).
+* Ideal for low-power hardware prone to event-loop delays.
+
+> **Why?**
+> A scheduler that *promises less* is dramatically more reliable.
+
+---
+
+### 2. **Human-Friendly Recurrence Rules**
+
+Each action can specify a recurrence like:
+
+```js
+repeat: {
+  type: 'weekday',      // or: second, minute, hour, day, week,
+                        //      month, year, weekend
+  interval: 1,          // every N occurrences
+  limit: null,          // optional max count
+  endDate: null,        // optional cutoff date
+  dstPolicy: 'once',    // or 'twice'
+}
+```
+
+Examples:
+
+* Every day at 7:00 AM
+* Every 15 minutes
+* Every weekend at 10:00
+* Every month on the 1st
+* Every weekday at market open
+* Once per second for 5 minutes (limit-based)
+
+---
+
+### 3. **Local-Time First, DST-Aware**
+
+jw-automator's recurrence rules operate in **local wall-clock time**, not UTC.
+
+This means:
+
+* "7:00 AM" always means **local** 7:00 AM.
+* Weekdays/weekends follow the user's locale.
+* DST transitions are **explicit and predictable**:
+
+  * **Spring forward:** missing hour handled via buffered/unBuffered rules
+  * **Fall back:** user chooses `dstPolicy: 'once' | 'twice'`
+
+This avoids cron's silent-but-surprising behaviors.
+
+---
+
+### 4. **Resilient Offline Catch-Up**
+
+If the device is offline or delayed (e.g., blocked by CPU load):
+
+```js
+unBuffered: false   // default: catch up missed executions
+unBuffered: true    // skip missed executions
+```
+
+For example:
+
+* A job scheduled at 09:00 will still run when the device restarts at 10:00 (if buffered).
+* A sequence of per-second readings will "compress" naturally after a delay.
+
+This feature is ideal for:
+
+* Home automation logic ("turn heater off at 9 even if offline")
+* Sensor sampling
+* Data collection pipelines
+
+---
+
+### 5. **Deterministic "Step Engine"**
+
+The heart of jw-automator is a pure scheduling primitive:
+
+```
+step(state, lastTick, now) → { newState, events }
+```
+
+This powers:
+
+* Real-time ticking
+* Offline catch-up
+* Future schedule simulation
+* Testing
+* Meta-scheduling (actions that schedule other actions)
+
+Because `step` is deterministic, you can:
+
+* Test schedules without time passing
+* Generate "what would happen tomorrow"
+* Debug recurrence rules
+* Build custom visual schedulers
+
+---
+
+### 6. **Meta-Actions (Actions that Create Actions)**
+
+jw-automator treats actions as **data**, enabling higher-order patterns:
+
+* A daily 7:00 AM action can spawn a sequence of 60 one-per-second actions.
+* A monthly billing action can create daily reminder actions.
+* A multi-step animation (e.g., dimming a light) can create timed sub-actions.
+
+Actions have a `repeat.count` that can be pre-set or manipulated intentionally.
+
+This makes jw-automator more like a *mini automation runtime* than just a cron clone.
+
+---
+
+## 📐 API Reference
+
+### Constructor
+
+```js
+new Automator(options)
+```
+
+Options:
+* `storage` - Storage adapter (default: memory)
+* `autoSave` - Auto-save state (default: true)
+* `saveInterval` - Save interval in ms (default: 5000)
+
+### Methods
+
+#### `start()`
+Start the scheduler.
+
+#### `stop()`
+Stop the scheduler and save state.
+
+#### `addFunction(name, fn)`
+Register a command function.
+
+```js
+automator.addFunction('myCommand', function(payload, event) {
+  console.log('Executing command with payload:', payload);
 });
 ```
 
-Result:
-Every 5 seconds the console will log 'Automator says: Hello World'
+#### `addAction(actionSpec)`
+Add a new action. Returns the action ID.
 
-## Constructor Options ##  
-``` javascript
-     var automator = new Auto.automator(options);
+```js
+const id = automator.addAction({
+  name: 'My Action',
+  cmd: 'myCommand',
+  date: new Date('2025-05-01T10:00:00'),
+  payload: { data: 'value' },
+  unBuffered: false,
+  repeat: {
+    type: 'hour',
+    interval: 2,
+    limit: 10,
+    dstPolicy: 'once'
+  }
+});
 ```
-__options.save__
-_boolean_ 
-Should the automator save its current state as a local JSON file. 
-Default = true  
 
-The save file will be overwritten by any addAction() calls in your code, so be aware of that. The automator is either designed to be used in a code-focused way, i.e. a simple program to log temperature data, or a user-controlled way, i.e. the backend to allow end-users to setup smart-light routines. As such the save file should probably only be used if you expect end-users to modify the actions.
+#### `updateActionByID(id, updates)`
+Update an existing action.
 
----
+```js
+automator.updateActionByID(1, {
+  name: 'Updated Name',
+  repeat: { type: 'day', interval: 1 }
+});
+```
 
-__options.saveFile__
-_string_
-Alternate path for the save file.  
-Default = '.actions.json'  
+#### `removeActionByID(id)`
+Remove an action by ID.
 
----
+#### `removeActionByName(name)`
+Remove all actions with the given name.
 
-## Public Functions ##  
+#### `getActions()`
+Get all actions (deep copy).
 
-__start()__  
-Starts the Automator   
+#### `getActionsByName(name)`
+Get actions by name.
 
----
+#### `getActionByID(id)`
+Get a specific action by ID.
 
-__getActions()__  
-Returns a listing of the current actions and their states  
+#### `getActionsInRange(startDate, endDate, callback)`
+Simulate actions in a time range.
 
----
+```js
+const events = automator.getActionsInRange(
+  new Date('2025-05-01'),
+  new Date('2025-05-07')
+);
 
-__removeActionByID(ID)__  
-Removes an action by the internal ID. You must use getActions() to determine the ID.  
-_params_
-1. ID _number_: The ID number for the action
+console.log(events); // Array of scheduled events
+```
 
----
+#### `describeAction(id)`
+Get a human-readable description of an action.
 
-__removeActionByName(name)__  
-Removes an action by the name you provided in the .name option when you created it.  
-_params_  
-1. name _string_: The action name  
+### Events
 
----
+Listen to events using `automator.on(event, callback)`:
 
-__executeActionByID(ID, increment)__  
-Forces a given action to run immediately.  
-_params_  
-1. ID _number_: the action ID  
-2. increment _boolean_: if true, this run will count towards the limit and count. Default = false  
+* `ready` - Scheduler started
+* `action` - Action executed
+* `update` - Action added/updated/removed
+* `error` - Error occurred
+* `debug` - Debug information
 
----
+```js
+automator.on('action', (event) => {
+  console.log('Action executed:', event.name);
+  console.log('Scheduled:', event.scheduledTime);
+  console.log('Actual:', event.actualTime);
+});
+```
 
-__executeActionByName(name, increment)__  
-Forces a given action to run immediately.  
-_params_  
-1. name _string_: the action name
-2. increment _boolean_: if true, this run will count towards the limit and count. Default = false  
+### Storage Adapters
 
----
+#### File Storage
 
-__getActionsInRange(start, end, callback)__  
-Generates an array of all the action objects that would run during a particular range of time. Every time an action will run will have an index in an array. This is useful if you're using the automator as the backend of a calendaring system and you want to display everything that will happen in a period of time, like for a week/month calendar display. Because actions can be set to repeat for a given limit or until a given date has occurred, the only way to generate this information is to simulate the actions and see what happens, as such it may take a few CPU cycles to generate the information. Therefore, this routine runs asynchronously and a callback must be used to retrieve the result.  
-_params_  
-1. start _Date_: the date/time to start the range  
-2. end _Date_: the date/time to end the range
-3. callback _function_: the callback function to run, returns an array with every action that will run, and the time it will run  
+```js
+const automator = new Automator({
+  storage: Automator.storage.file('./actions.json')
+});
+```
 
----
+#### Memory Storage
 
-__updateActionByID(ID, newAction)__  
-Updates an action by it's ID. Use to change an action in some way, like to modify it's interval or end date, etc.  
-_params_  
-1. ID _number_: the action ID  
-2. newAction _object_: a new action object. It does not need to be a complete action, this will just overwrite the existing action with the new values you provide.  
+```js
+const automator = new Automator({
+  storage: Automator.storage.memory()
+});
+```
 
----
+#### Custom Storage
 
-__updateActionByName(name, newAction)__  
-Updates an action by it's name. Use to change an action in some way, like to modify it's interval or end date, etc.  
-_params_  
-1. name _string_: the action name  
-2. newAction _object_: a new action object. It does not need to be a complete action, this will just overwrite the existing action with the new values you provide.  
-
----
-
-__addAction(action)__  
-Adds a new action to the automator.  
-_params:_
-1. action _object_: The action object, see below for details.
-
----
-
-## Action Options ##
-
----
-
-__name__ _required_   
-_string_  
-The name of the action.  
-
----
-
-__date__  
-_Date_  
-The first time the action should run, leave blank or set to null to run immediately. The date can be in the past if needed, useful if the action is only supposed to run a set number of times and it should have started running already.  
-
----
-
-__cmd__ _required_  
-_string_  
-The name of the function to run, must match a name added with the addAction() command.  
-
----
-
-__payload__
-_any_  
-An immutable payload to send the command. This is useful when you are using a command that is used by more than one action. As an example, if you have a function that logs some sort of data from various sensors, you could use the payload param to indicate which sensor to log. Honestly though, it's probably better to put whatever information you need in the automator action itself and then use that to call your theoretical logging function.  
-
----
-
-__unBuffered__  
-_boolean_  
-In a perfect world your action will run exactly when it is supposed to. In the real world it is possible that your CPU will be busy with other tasks during the entire second that the action was supposed to run. By default actions are buffered, so the action will run as soon as possible, which for most intended uses is what would be wanted. For example, if your action was meant to turn on the living room lights at exactly 9:00:00am, but due to CPU overhead they actually got turned on at 9:00:01am that would be fine, and desireable. There may be some cases, for example if you were running an action every single second, that missing a time might be better than running the same action several times at once when the CPU became free from whatever tasks were occupying it. If that's the case, set unBuffered=true  
-
----
-
-__repeat__  
-_object_  
-The repeat object is the key part of the action as it specifies how the action should repeat! You can have an action that repeats forever at a specified interval, you can have an action that repeats until a certain date/time and/or you can have an action that repeats a certain number of times.
-
----
-
-__repeat.type__
-_string_
-Valid options: second, minute, hour, day, week, month, year, weekday, weekend  
-Weekdays are Monday-Friday and Weekends are Saturday-Sunday. If you have an action repeat every 1 weekday it will repeat every day, Mon-Fri, then skip the weekend, then run again on Monday, etc.  
-Each Weekday or Weekend (day) counts as one day, so if you have an action repeat every 2 weekend days starting on the first upcoming Saturday it will run Saturday, then will skip the next 2 weekend days (Sunday, Saturday next week) and run on Sunday (week 2), then skip the following Saturday and Sunday (week 3) and run again on Saturday (week 4).  
-
----
-
-__interval__ _required_  
-_number_  
-The interval of the action. 1 = every time, 2=every other time, 3=every other 3rd time, etc.  
-So, if you have an action starting at 6:00am, running every minute with an interval of 3, the action will run at:  
-6:00am  
-6:03am  
-6:06am  
-6:09am  
-etc.  
-
----
-
-__limit__
-_number_
-how many times the action should run. If you want an action to run every 15 minutes for an hour you can set a limit of 5 and the action will run:
-01:00  
-01:15  
-01:30  
-01:45  
-02:00  
-And then stop.  
-If you want an action to only run a certain number of times you can use __limit__ or __endDate__ as makes the most sense for your needs. Whichever comes first will be when the action stops.  
-
-___
-
-__endDate__  
-_Date_  
-The date and time the action should stop.  
-If you want an action to only run a certain number of times you can use __limit__ or __endDate__ as makes the most sense for your needs. Whichever comes first will be when the action stops.  
-
----
-
-__count__
-_number_  
-This is how many times the action has already run. Only useful if a limit is set and you want to override the default starting count. I can't think of any reason to do this outside of a debug environment.    
-__NOTE:__ If you specify a limit and a start date in the past, the automator will simulate all the times the action should have run without actually running it, so if you create an action on Wednesday that is set to have started on Monday and should run every day, 5 times, it will run on Wednesday (today), Thursday and Friday. If you set a different count, like say 0, then it will run Wed,Thurs, Fri, Sat, Sun instead since you overrode the count.  
-
----
-
-__Here is a complete copy/paste version of the complete action object to use in your code:__
-```javascript
-var action = {
-    name: '', //user definable
-    date: null, //next time the action should run, set null for immediately
-    cmd: null, //function to call
-    payload: null, //payload to send to function
-    unBuffered: null, //when true actions missed due to sync delay will be skipped
-    repeat: { //set this to null to only run the action once, alternatively set limit to 1
-        type:'minute', // second/minute/hour/day/week/month/year/weekday/weekend
-        interval: 1, //how many of the type to skip, 3=every 3rd type
-        count: 0, //number of times the action has run, 0=hasn't run yet
-        limit: null, //number of times the action should run, false means don't limit
-        endDate: null //null = no end date
+```js
+const automator = new Automator({
+  storage: {
+    load: function() {
+      // Return { actions: [...] }
+    },
+    save: function(state) {
+      // Save state
     }
-};
+  }
+});
 ```
 
-## Emitters ##  
-The automator will emit the following events, use with:
+---
 
-```javascript
-    automator.on('emitterName', (payload)=>  {
-        console.log(payload);
-    });
+## 📊 Example: Sensor Reading Every Second
+
+```js
+automator.addAction({
+  name: 'TempSensor',
+  cmd: 'readTemp',
+  date: null,            // run immediately
+  payload: null,
+  unBuffered: false,     // catch up if delayed
+  repeat: {
+    type: 'second',
+    interval: 1
+  }
+});
 ```
 
-__debug__  
-Emits debug notifications  
+If the system stalls:
+
+* At 00:00:00 → reading #1
+* Heavy load → no ticks for 5 seconds
+* At 00:00:06 → automator triggers readings #2–#6, advancing schedule
+
+Your "60 readings per minute" pattern is preserved logically.
 
 ---
 
-__ready__  
-Fires when the automator object is ready for use after being declared. The automator always fires exactly on the second so it may take up to 999 milliseconds for the automator to start. There may also be an async file read when you declare the automator.
+## 🕰 DST Behavior Examples
+
+### Fall Back (Repeated Hour)
+
+07:30 happens twice:
+
+```
+1) 07:30 (DST)
+2) 07:30 (Standard)
+```
+
+User chooses:
+
+* `dstPolicy: 'twice'` → run both
+* `dstPolicy: 'once'` → run only the first instance
+
+### Spring Forward (Missing Hour)
+
+02:30 does not exist.
+
+* Buffered → run as soon as possible after the jump
+* Unbuffered → skip silently
 
 ---
 
-__error__  
-Emits error messages  
+## 🧪 Testing
+
+```bash
+npm test
+npm run test:coverage
+```
 
 ---
 
-__update__  
-Fires when the action list is updated via updateAction() or addAction()  
+## 📦 Action Specification
+
+### Top-level action fields:
+
+| Field        | Description                                       |
+| ------------ | ------------------------------------------------- |
+| `id`         | Unique internal identifier (auto-generated)       |
+| `name`       | User label (optional)                             |
+| `cmd`        | Name of registered function to execute            |
+| `payload`    | Data passed to the command                        |
+| `date`       | Next scheduled run time (local `Date`)            |
+| `unBuffered` | Skip missed events (`true`) or catch up (`false`) |
+
+### Repeat block:
+
+| Field       | Description                       |
+| ----------- | --------------------------------- |
+| `type`      | Recurrence unit                   |
+| `interval`  | Nth occurrence                    |
+| `limit`     | Number of times to run, or `null` |
+| `endDate`   | Max date, or `null`               |
+| `count`     | Execution counter (internal)      |
+| `dstPolicy` | `'once'` or `'twice'`             |
 
 ---
 
-__action__
-Returns a list of actions that were run in that second.
+## 🎯 Project Goals (v2)
 
+* Deterministic behavior
+* Rock-solid DST handling
+* Predictable local-time recurrence
+* Resilience to offline and delays
+* Developer-friendly ergonomics
+* Suitable for small devices
+* Approachable but powerful API
+* Long-term maintainability
 
-## Advanced Use ##
+---
 
-You can use the automator to add actions to itself or to run millisecond interval events using the functions called from a primary action.  
+## 📝 License
 
-__example #1__  
+MIT
 
-A primary action runs every hour which creates a secondary action that runs every minute for 5 minutes to read a sensor for the purpose of averaging the readings. This is also an example of a reason to use the limit option instead of the endDate option.
+---
 
-__example #2__  
+## ❤️ Acknowledgments
 
-Same as #1, but this time your sensor has millisecond level speed and instead of creating a secondary action you have 2 primary actions, 1 that starts a setInterval() call using a sub-second interval and one that stops the interval some time in the future.  
+jw-automator v2 is a ground-up rethinking of the original jw-automator library, preserving the spirit while strengthening the foundations.
 
+If you're building automation logic and want predictable, human-friendly scheduling that survives the real world — **welcome.**
