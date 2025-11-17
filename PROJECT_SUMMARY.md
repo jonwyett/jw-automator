@@ -1,4 +1,4 @@
-# jw-automator v2 - Project Summary
+# jw-automator v3 - Project Summary
 
 ## Overview
 
@@ -29,7 +29,7 @@ jw-automator/
 │   └── iot-sensor-example.js     # IoT sensor reading example
 ├── docs/
 │   ├── ARCHITECTURE.md           # Internal architecture documentation
-│   ├── MIGRATION.md              # v1 to v2 migration guide
+│   ├── MIGRATION.md              # v2 to v3 migration guide
 │   └── QUICKSTART.md             # Quick start guide
 ├── index.js                      # Package entry point
 ├── package.json                  # Package configuration
@@ -171,7 +171,7 @@ Recurrence Engine (RecurrenceEngine)
 ### User-Facing
 - **README.md**: Complete feature overview and API reference
 - **QUICKSTART.md**: Get started in 5 minutes
-- **MIGRATION.md**: Upgrade guide from v1
+- **MIGRATION.md**: Upgrade guide from v2
 
 ### Developer-Facing
 - **ARCHITECTURE.md**: Internal design and component breakdown
@@ -255,7 +255,7 @@ new Automator({ storage, autoSave, saveInterval })
 
 ---
 
-## Key Improvements from v1
+## Key Improvements from v2
 
 1. **Deterministic Core**: Pure step function
 2. **Explicit DST**: No more silent surprises
@@ -272,7 +272,7 @@ new Automator({ storage, autoSave, saveInterval })
 
 ## Future Enhancement Possibilities
 
-### Potential v2.x Features
+### Potential v3.x Features
 - TypeScript definitions
 - Explicit timezone support
 - Cron expression compatibility
@@ -327,7 +327,7 @@ Total (source):           ~31 KB
 
 ## Implementation Status
 
-✅ **Complete**: All v2 features implemented
+✅ **Complete**: All v3 features implemented
 ✅ **Tested**: 43 tests passing
 ✅ **Documented**: Full documentation suite
 ✅ **Examples**: Working examples included
@@ -367,6 +367,6 @@ Jon Wyett
 
 ## Summary
 
-jw-automator v2 is a **complete, tested, documented, production-ready** automation scheduler that delivers on all the promises of the design documents. It provides reliable, predictable, human-friendly scheduling for Node.js environments where correctness matters more than millisecond precision.
+jw-automator v3 is a **complete, tested, documented, production-ready** automation scheduler that delivers on all the promises of the design documents. It provides reliable, predictable, human-friendly scheduling for Node.js environments where correctness matters more than millisecond precision.
 
 **Status**: ✅ Ready to use

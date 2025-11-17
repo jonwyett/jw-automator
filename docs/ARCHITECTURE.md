@@ -1,8 +1,8 @@
 # Architecture Overview
 
-## jw-automator v2 Architecture
+## jw-automator v3 Architecture
 
-This document describes the internal architecture of jw-automator v2.
+This document describes the internal architecture of jw-automator v3.
 
 ---
 

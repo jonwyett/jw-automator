@@ -1,5 +1,5 @@
 /**
- * Hello World - jw-automator v2
+ * Hello World - jw-automator v3
  *
  * The simplest possible example.
  */

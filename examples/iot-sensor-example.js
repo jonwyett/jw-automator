@@ -1,5 +1,5 @@
 /**
- * IoT Sensor Example - jw-automator v2
+ * IoT Sensor Example - jw-automator v3
  *
  * Demonstrates using jw-automator for sensor reading and data collection
  * typical in IoT and home automation scenarios.

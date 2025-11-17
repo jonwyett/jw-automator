@@ -1,0 +1,62 @@
+# Development and testing files
+__snapshots__/
+__backup__/
+dev/
+dev-archive/
+.vscode/
+.claude/
+backup/
+
+# Test files
+tests/
+*.test.js
+coverage/
+
+# Development documentation
+VERSION_HISTORY.md
+PROJECT_SUMMARY.md
+CLAUDE.md
+
+# Git files
+.git/
+.gitignore
+.gitattributes
+
+# Editor files
+*.swp
+*.swo
+*~
+.DS_Store
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+
+# Misc development files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.eslintcache
+mdCreator.js
+snapshot
+snapshot.exe
+.snapshotignore
+
+# Development dependencies
+node_modules/
+
+# Keep these for published package:
+# - src/
+# - examples/
+# - docs/
+# - index.js
+# - package.json
+# - README.md
+# - CHANGELOG.md
+# - LICENSE (if exists)
+
+# Example generated files
+examples/example-actions.json
+examples/actions.json

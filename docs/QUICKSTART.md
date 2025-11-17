@@ -1,6 +1,6 @@
 # Quick Start Guide
 
-Get up and running with jw-automator v2 in 5 minutes.
+Get up and running with jw-automator v3 in 5 minutes.
 
 ---
 

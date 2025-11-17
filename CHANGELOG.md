@@ -5,9 +5,9 @@ All notable changes to jw-automator will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.0.0] - 2025-05-01
+## [3.0.0] - 2025-11-17
 
-### Added (v2 Complete Rewrite)
+### Added (v3 Complete Rewrite)
 
 - **Core Engine**: Pure deterministic `step()` function for scheduling
 - **1-Second Precision**: Fixed 1-second tick interval with zero drift
@@ -44,7 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Comprehensive Tests**: Full test suite with Jest
 - **Examples**: Basic and IoT sensor examples included
 
-### Changed from v1
+### Changed from v2
 
 - Complete clean-room rewrite
 - Improved DST handling with explicit policies
@@ -63,10 +63,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive documentation
 - Type-safe action specifications
 
-## [1.x] - Legacy Version
+---
 
-Previous version available in backup. See git history for details.
+## [2.x] - Legacy
+
+**Production version - widely deployed**
+
+Version 2.x was the stable, production release of jw-automator that was actively used in home automation, IoT projects, and personal servers. Available in git history.
 
 ---
 
-For upgrade guidance from v1 to v2, see the migration guide in the documentation.
+For upgrade guidance from v2 to v3, see the migration guide in the documentation.

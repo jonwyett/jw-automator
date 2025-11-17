@@ -1,7 +1,7 @@
 /**
  * Automator.js
  *
- * Main API class for jw-automator v2
+ * Main API class for jw-automator v3
  */
 
 const SchedulerHost = require('./host/SchedulerHost');

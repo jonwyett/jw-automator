@@ -1,12 +1,14 @@
-# Migration Guide: v1 to v2
+# Migration Guide: v2 to v3
 
-This guide helps you migrate from jw-automator v1 to v2.
+This guide helps you migrate from jw-automator v2 to v3.
 
 ---
 
 ## Overview
 
-jw-automator v2 is a **complete rewrite** with improved semantics, better DST handling, and a cleaner API. While the core concepts remain the same, there are breaking changes.
+jw-automator v3 is a **complete clean-room rewrite** with improved semantics, better DST handling, and a cleaner API. While the core concepts remain the same, there are breaking changes from v2.
+
+v2 was the widely-deployed production version. v3 represents a ground-up reimplementation that preserves the philosophy while modernizing the architecture.
 
 ---
 
@@ -14,13 +16,13 @@ jw-automator v2 is a **complete rewrite** with improved semantics, better DST ha
 
 ### 1. Constructor and Initialization
 
-**v1:**
+**v2:**
 ```javascript
 const automator = require('jw-automator');
 automator.init({ file: './actions.json' });
 ```
 
-**v2:**
+**v3:**
 ```javascript
 const Automator = require('jw-automator');
 const automator = new Automator({
@@ -30,10 +32,10 @@ const automator = new Automator({
 
 ### 2. Action Structure
 
-**v1:**
+**v2:**
 Action structure was less formalized.
 
-**v2:**
+**v3:**
 ```javascript
 {
   id: 1,              // Auto-generated
@@ -47,7 +49,7 @@ Action structure was less formalized.
     interval: 1,
     limit: null,
     endDate: null,
-    dstPolicy: 'once' // NEW in v2
+    dstPolicy: 'once' // NEW in v3
   },
   count: 0           // Execution counter
 }
@@ -55,10 +57,10 @@ Action structure was less formalized.
 
 ### 3. DST Policy
 
-**v1:**
+**v2:**
 DST behavior was implicit and sometimes unpredictable.
 
-**v2:**
+**v3:**
 Explicit DST policy for fall-back scenarios:
 ```javascript
 repeat: {
@@ -70,10 +72,10 @@ repeat: {
 
 ### 4. Event Names
 
-**v1:**
+**v2:**
 Various event names.
 
-**v2:**
+**v3:**
 Standardized events:
 - `ready` - Scheduler started
 - `action` - Action executed
@@ -85,12 +87,12 @@ Standardized events:
 
 #### Adding Actions
 
-**v1:**
+**v2:**
 ```javascript
 automator.addAction(actionObject);
 ```
 
-**v2:**
+**v3:**
 ```javascript
 const id = automator.addAction(actionSpec);
 // Returns the action ID
@@ -98,12 +100,12 @@ const id = automator.addAction(actionSpec);
 
 #### Getting Actions
 
-**v1:**
+**v2:**
 ```javascript
 const actions = automator.getActions();
 ```
 
-**v2:**
+**v3:**
 ```javascript
 const actions = automator.getActions(); // Deep copy
 const action = automator.getActionByID(id);
@@ -112,12 +114,12 @@ const actions = automator.getActionsByName('name');
 
 #### Removing Actions
 
-**v1:**
+**v2:**
 ```javascript
 automator.removeAction(id);
 ```
 
-**v2:**
+**v3:**
 ```javascript
 automator.removeActionByID(id);
 automator.removeActionByName('name'); // Returns count removed
@@ -125,10 +127,10 @@ automator.removeActionByName('name'); // Returns count removed
 
 #### Updating Actions
 
-**v1:**
+**v2:**
 Limited update capability.
 
-**v2:**
+**v3:**
 ```javascript
 automator.updateActionByID(id, {
   name: 'New Name',
@@ -138,7 +140,7 @@ automator.updateActionByID(id, {
 
 ---
 
-## New Features in v2
+## New Features in v3
 
 ### 1. Simulation
 
@@ -230,7 +232,7 @@ const automator = new Automator({
 
 ### Step 1: Update Initialization
 
-Replace your v1 initialization with v2 constructor:
+Replace your v2 initialization with v3 constructor:
 
 ```javascript
 // Before
@@ -333,7 +335,7 @@ Consider using:
 
 ## Example: Complete Migration
 
-**v1 Code:**
+**v2 Code:**
 ```javascript
 const automator = require('jw-automator');
 automator.init({ file: './actions.json' });
@@ -351,7 +353,7 @@ automator.addAction({
 automator.start();
 ```
 
-**v2 Code:**
+**v3 Code:**
 ```javascript
 const Automator = require('jw-automator');
 
@@ -393,7 +395,7 @@ If you encounter issues during migration:
 
 ## Why Rewrite?
 
-v2 addresses several issues from v1:
+v3 addresses several issues from v2:
 
 - **Infinite loops**: Better safety guards
 - **DST bugs**: Explicit, predictable handling

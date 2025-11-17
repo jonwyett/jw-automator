@@ -1,5 +1,5 @@
 /**
- * Basic Example - jw-automator v2
+ * Basic Example - jw-automator v3
  *
  * This example demonstrates the core features of jw-automator.
  */

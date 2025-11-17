@@ -1,4 +1,4 @@
-# 📚 **jw-automator v2**
+# 📚 **jw-automator v3**
 
 ### A resilient, local-time, 1-second precision automation scheduler for Node.js
 
@@ -31,7 +31,7 @@ This makes jw-automator ideal for:
 * "Smart home" orchestrations
 * Systems that must *survive restarts, reboots, offline gaps, and DST transitions*
 
-jw-automator v2 is a **clean-room re-architecture** of the original library, keeping its best ideas while formalizing its semantics, improving correctness, and providing a crisp developer experience.
+jw-automator v3 is a **clean-room re-architecture** of the original library, keeping its best ideas while formalizing its semantics, improving correctness, and providing a crisp developer experience.
 
 ---
 
@@ -426,7 +426,7 @@ npm run test:coverage
 
 ---
 
-## 🎯 Project Goals (v2)
+## 🎯 Project Goals (v3)
 
 * Deterministic behavior
 * Rock-solid DST handling
@@ -447,6 +447,6 @@ MIT
 
 ## ❤️ Acknowledgments
 
-jw-automator v2 is a ground-up rethinking of the original jw-automator library, preserving the spirit while strengthening the foundations.
+jw-automator v3 is a ground-up rethinking of the original jw-automator library, preserving the spirit while strengthening the foundations.
 
 If you're building automation logic and want predictable, human-friendly scheduling that survives the real world — **welcome.**

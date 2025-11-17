@@ -1,8 +1,16 @@
 {
   "name": "jw-automator",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "description": "A resilient, local-time, 1-second precision automation scheduler for Node.js",
   "main": "index.js",
+  "files": [
+    "src/",
+    "examples/",
+    "docs/",
+    "index.js",
+    "README.md",
+    "CHANGELOG.md"
+  ],
   "scripts": {
     "test": "jest",
     "test:watch": "jest --watch",
