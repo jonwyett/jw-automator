@@ -269,9 +269,15 @@ const id = automator.addAction({
 ### Update
 
 ```javascript
+// By ID
 automator.updateActionByID(id, {
   name: 'Updated Task',
   repeat: { type: 'hour', interval: 2 }
+});
+
+// By name
+automator.updateActionByName('My Task', {
+  payload: { updated: true }
 });
 ```
 

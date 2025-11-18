@@ -136,6 +136,10 @@ automator.updateActionByID(id, {
   name: 'New Name',
   repeat: { type: 'hour', interval: 2 }
 });
+
+automator.updateActionByName('Old Name', {
+  name: 'New Name'
+});
 ```
 
 ---

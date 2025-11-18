@@ -160,6 +160,53 @@ class Automator {
   }
 
   /**
+   * Update actions by name
+   */
+  updateActionByName(name, updates) {
+    const state = this.host.getState();
+    const toUpdate = state.actions.filter(a => a.name === name);
+
+    if (toUpdate.length === 0) {
+      // For consistency with removeActionByName, we could throw an error.
+      // However, it might be more convenient to simply return 0.
+      // Let's return 0 for now.
+      return 0;
+    }
+
+    const allowedUpdates = ['cmd', 'payload', 'date', 'unBuffered', 'repeat', 'count'];
+
+    for (const action of toUpdate) {
+      for (const key of allowedUpdates) {
+        if (key in updates) {
+          if (key === 'date' && updates[key]) {
+            action[key] = new Date(updates[key]);
+          } else if (key === 'repeat' && updates[key]) {
+            action[key] = { ...action.repeat, ...updates[key] };
+            if (!action[key].dstPolicy) {
+              action[key].dstPolicy = 'once';
+            }
+          } else {
+            action[key] = updates[key];
+          }
+        }
+      }
+
+      this._emit('update', {
+        type: 'update',
+        operation: 'update',
+        actionId: action.id,
+        action: { ...action }
+      });
+    }
+
+    if (this.options.autoSave) {
+      this._saveState();
+    }
+
+    return toUpdate.length;
+  }
+
+  /**
    * Remove action by ID
    */
   removeActionByID(id) {

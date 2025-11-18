@@ -257,6 +257,15 @@ automator.updateActionByID(1, {
 });
 ```
 
+#### `updateActionByName(name, updates)`
+Update all actions with the given name. Returns the number of actions updated.
+
+```js
+automator.updateActionByName('My Action', {
+  payload: { newData: 'newValue' }
+});
+```
+
 #### `removeActionByID(id)`
 Remove an action by ID.
 

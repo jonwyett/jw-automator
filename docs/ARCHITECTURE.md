@@ -156,7 +156,7 @@ setTimeout(() => tick(), wait);
 - Event emission
 
 **Key APIs**:
-- Action management: `addAction`, `updateActionByID`, `removeActionByID`, etc.
+- Action management: `addAction`, `updateActionByID`, `updateActionByName`, `removeActionByID`, etc.
 - Function registration: `addFunction`, `removeFunction`
 - Introspection: `getActions`, `describeAction`, `getActionsInRange`
 - Lifecycle: `start`, `stop`
