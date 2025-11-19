@@ -58,20 +58,22 @@ automator.addFunction('turnLightOn', function(payload) {
   console.log('Turning light on');
 });
 
-// Add an action
-automator.addAction({
-  name: 'Morning Lights',
-  cmd: 'turnLightOn',
-  date: new Date('2025-05-01T07:00:00'),
-  payload: null,
-  unBuffered: false,
-  repeat: {
-    type: 'day',
-    interval: 1,
-    limit: null,
-    endDate: null,
-    dstPolicy: 'once'
-  }
+// Seed initial actions (runs only on first use)
+automator.seed((auto) => {
+  auto.addAction({
+    name: 'Morning Lights',
+    cmd: 'turnLightOn',
+    date: new Date('2025-05-01T07:00:00'),
+    payload: null,
+    catchUpWindow: 60000, // Tolerate 1 minute of lag
+    repeat: {
+      type: 'day',
+      interval: 1,
+      limit: null,
+      endDate: null,
+      dstPolicy: 'once'
+    }
+  });
 });
 
 // Start the scheduler
@@ -137,25 +139,35 @@ This avoids cron's silent-but-surprising behaviors.
 
 ---
 
-### 4. **Resilient Offline Catch-Up**
+### 4. **Resilient Offline Catch-Up with Time Windows**
 
-If the device is offline or delayed (e.g., blocked by CPU load):
+When the device is offline or delayed, you can control exactly how far back to catch up using the `catchUpWindow` property:
 
 ```js
-unBuffered: false   // default: catch up missed executions
-unBuffered: true    // skip missed executions
+catchUpWindow: "unlimited"  // Catch up ALL missed executions (default)
+catchUpWindow: 0            // Skip ALL missed executions (real-time only)
+catchUpWindow: 5000         // Catch up if missed by ≤5 seconds, skip if older
 ```
 
-For example:
+**How it works:**
 
-* A job scheduled at 09:00 will still run when the device restarts at 10:00 (if buffered).
-* A sequence of per-second readings will "compress" naturally after a delay.
+* If an action is missed by less than `catchUpWindow` milliseconds, it executes (recovers from brief glitches)
+* If missed by more than `catchUpWindow`, it's skipped and fast-forwarded (prevents thundering herd)
+* The fast-forward optimization uses mathematical projection to instantly advance high-frequency tasks
 
-This feature is ideal for:
+**Example scenarios:**
 
-* Home automation logic ("turn heater off at 9 even if offline")
-* Sensor sampling
-* Data collection pipelines
+* **Billing tasks:** `catchUpWindow: "unlimited"` - Never miss a charge
+* **Real-time alerts:** `catchUpWindow: 0` - Only relevant "now"
+* **Sensor readings:** `catchUpWindow: 5000` - Tolerate 5s lag, skip if system was down for hours
+
+**Backwards compatibility:**
+
+The legacy `unBuffered` property is still fully supported:
+```js
+unBuffered: false   // equivalent to catchUpWindow: "unlimited"
+unBuffered: true    // equivalent to catchUpWindow: 0
+```
 
 ---
 
@@ -212,6 +224,30 @@ Options:
 * `saveInterval` - Save interval in ms (default: 5000)
 
 ### Methods
+
+#### `seed(callback)`
+Seed the automator with initial actions. Runs only when the database is empty (first use).
+
+**Returns:** `boolean` - `true` if seeding ran, `false` if skipped
+
+```js
+automator.seed((auto) => {
+  auto.addAction({
+    name: 'Daily Report',
+    cmd: 'generateReport',
+    date: new Date('2025-01-01T09:00:00'),
+    catchUpWindow: "unlimited",
+    repeat: { type: 'day', interval: 1 }
+  });
+});
+```
+
+**Why use seed()?**
+
+* Solves the bootstrapping problem: safely initialize actions without resetting the schedule on every restart
+* Preserves user-modified schedules perfectly
+* Runs initialization logic only once in the application lifecycle
+* Automatically saves state after seeding
 
 #### `start()`
 Start the scheduler.
@@ -413,14 +449,15 @@ npm run test:coverage
 
 ### Top-level action fields:
 
-| Field        | Description                                       |
-| ------------ | ------------------------------------------------- |
-| `id`         | Unique internal identifier (auto-generated)       |
-| `name`       | User label (optional)                             |
-| `cmd`        | Name of registered function to execute            |
-| `payload`    | Data passed to the command                        |
-| `date`       | Next scheduled run time (local `Date`)            |
-| `unBuffered` | Skip missed events (`true`) or catch up (`false`) |
+| Field           | Description                                                           |
+| --------------- | --------------------------------------------------------------------- |
+| `id`            | Unique internal identifier (auto-generated)                          |
+| `name`          | User label (optional)                                                |
+| `cmd`           | Name of registered function to execute                               |
+| `payload`       | Data passed to the command                                           |
+| `date`          | Next scheduled run time (local `Date`)                               |
+| `catchUpWindow` | Time window for catching up missed executions (default: `"unlimited"`, or milliseconds number) |
+| `unBuffered`    | Legacy: Skip missed events (`true`) or catch up (`false`)           |
 
 ### Repeat block:
 

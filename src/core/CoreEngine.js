@@ -52,14 +52,47 @@ class CoreEngine {
       let iterationCount = 0;
       let currentNextRun = nextRun;
 
+      // Get catchUpWindow (defaults to "unlimited" for backwards compatibility)
+      const catchUpWindow = action.catchUpWindow !== undefined ? action.catchUpWindow : "unlimited";
+
+      // Fast-forward optimization: if we're far outside the catch-up window,
+      // jump directly to near the current time using mathematical projection
+      if (catchUpWindow !== "unlimited" && action.repeat) {
+        const lag = now.getTime() - currentNextRun.getTime();
+
+        if (lag > catchUpWindow * 2) {
+          // We're deep in the "Dead Zone" - use fast-forward
+          const fastForwardResult = this._fastForwardAction(action, now, catchUpWindow);
+
+          if (fastForwardResult) {
+            currentNextRun = fastForwardResult.nextRun;
+            action.date = currentNextRun;
+            action.count = fastForwardResult.count;
+
+            // After fast-forward, if still outside window, just advance without executing
+            if (currentNextRun <= now) {
+              const finalLag = now.getTime() - currentNextRun.getTime();
+              if (finalLag > catchUpWindow) {
+                // Still outside window after fast-forward, skip to next viable occurrence
+                this._advanceAction(action);
+                currentNextRun = action.date ? new Date(action.date) : null;
+              }
+            }
+          }
+        }
+      }
+
       while (currentNextRun <= now && iterationCount < maxIterations) {
         iterationCount++;
 
-        // Determine if we should execute this occurrence
-        // UnBuffered: only execute if this is the actual current tick (not catching up)
-        // Buffered: execute all missed occurrences
+        const lag = now.getTime() - currentNextRun.getTime();
+
+        // Determine if we should execute this occurrence based on catchUpWindow
         const isInCurrentTick = currentNextRun > lastTick && currentNextRun <= now;
-        const shouldExecute = action.unBuffered ? isInCurrentTick : true;
+        const isWithinWindow = catchUpWindow === "unlimited" || lag <= catchUpWindow;
+
+        // Legacy unBuffered behavior (maps to catchUpWindow: 0 or Infinity)
+        const shouldExecute = isWithinWindow;
 
         if (shouldExecute) {
           const event = this._executeAction(action, currentNextRun);
@@ -166,6 +199,77 @@ class CoreEngine {
       // One-time action - clear date
       action.date = null;
     }
+  }
+
+  /**
+   * Fast-forward an action to near the current time using mathematical projection
+   * This avoids iterating through thousands/millions of occurrences for high-frequency tasks
+   *
+   * @param {Object} action - The action to fast-forward
+   * @param {Date} now - Current time
+   * @param {number} catchUpWindow - The catch-up window in milliseconds
+   * @returns {Object|null} - { nextRun, count } or null if not applicable
+   */
+  static _fastForwardAction(action, now, catchUpWindow) {
+    if (!action.repeat || !action.date) {
+      return null;
+    }
+
+    const { type, interval = 1 } = action.repeat;
+    const currentTime = new Date(action.date);
+    const lag = now.getTime() - currentTime.getTime();
+
+    // Only applicable for simple time-based recurrence (not weekday/weekend)
+    let stepMilliseconds = 0;
+
+    switch (type) {
+      case 'second':
+        stepMilliseconds = interval * 1000;
+        break;
+      case 'minute':
+        stepMilliseconds = interval * 60 * 1000;
+        break;
+      case 'hour':
+        stepMilliseconds = interval * 60 * 60 * 1000;
+        break;
+      case 'day':
+        stepMilliseconds = interval * 24 * 60 * 60 * 1000;
+        break;
+      case 'week':
+        stepMilliseconds = interval * 7 * 24 * 60 * 60 * 1000;
+        break;
+      default:
+        // Complex recurrence (weekday, weekend, month, year) - can't fast-forward easily
+        return null;
+    }
+
+    if (stepMilliseconds === 0) {
+      return null;
+    }
+
+    // Calculate how many steps we can skip
+    // We want to jump to just before the catch-up window starts
+    const targetLag = catchUpWindow;
+    const timeToSkip = lag - targetLag;
+
+    if (timeToSkip <= 0) {
+      return null;
+    }
+
+    const stepsToSkip = Math.floor(timeToSkip / stepMilliseconds);
+
+    if (stepsToSkip <= 0) {
+      return null;
+    }
+
+    // Project forward
+    const newTime = new Date(currentTime.getTime() + (stepsToSkip * stepMilliseconds));
+    const newCount = (action.count || 0) + stepsToSkip;
+
+    return {
+      nextRun: newTime,
+      count: newCount
+    };
   }
 
   /**

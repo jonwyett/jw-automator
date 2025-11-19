@@ -50,51 +50,54 @@ automator.on('error', (event) => {
   console.error('Error:', event.message);
 });
 
-// Add actions
+// Seed initial actions (runs only on first use)
+automator.seed((auto) => {
+  console.log('Seeding initial actions...\n');
 
-// 1. Every 10 seconds - demo message
-automator.addAction({
-  name: 'Demo Message',
-  cmd: 'logMessage',
-  date: new Date(Date.now() + 5000), // Start in 5 seconds
-  payload: { message: 'This is a recurring message every 10 seconds' },
-  unBuffered: false,
-  repeat: {
-    type: 'second',
-    interval: 10,
-    limit: 6, // Run 6 times then stop
-    dstPolicy: 'once'
-  }
-});
+  // 1. Every 10 seconds - demo message
+  auto.addAction({
+    name: 'Demo Message',
+    cmd: 'logMessage',
+    date: new Date(Date.now() + 5000), // Start in 5 seconds
+    payload: { message: 'This is a recurring message every 10 seconds' },
+    catchUpWindow: 30000, // Tolerate 30 seconds of lag
+    repeat: {
+      type: 'second',
+      interval: 10,
+      limit: 6, // Run 6 times then stop
+      dstPolicy: 'once'
+    }
+  });
 
-// 2. Daily morning routine at 7:00 AM
-automator.addAction({
-  name: 'Morning Routine',
-  cmd: 'morningRoutine',
-  date: new Date(new Date().setHours(7, 0, 0, 0)),
-  unBuffered: false,
-  repeat: {
-    type: 'day',
-    interval: 1,
-    dstPolicy: 'once'
-  }
-});
+  // 2. Daily morning routine at 7:00 AM
+  auto.addAction({
+    name: 'Morning Routine',
+    cmd: 'morningRoutine',
+    date: new Date(new Date().setHours(7, 0, 0, 0)),
+    catchUpWindow: "unlimited", // Never miss a morning routine
+    repeat: {
+      type: 'day',
+      interval: 1,
+      dstPolicy: 'once'
+    }
+  });
 
-// 3. Weekly backup every Sunday at 2:00 AM
-const nextSunday = new Date();
-nextSunday.setDate(nextSunday.getDate() + (7 - nextSunday.getDay()) % 7);
-nextSunday.setHours(2, 0, 0, 0);
+  // 3. Weekly backup every Sunday at 2:00 AM
+  const nextSunday = new Date();
+  nextSunday.setDate(nextSunday.getDate() + (7 - nextSunday.getDay()) % 7);
+  nextSunday.setHours(2, 0, 0, 0);
 
-automator.addAction({
-  name: 'Weekly Backup',
-  cmd: 'weeklyBackup',
-  date: nextSunday,
-  unBuffered: false,
-  repeat: {
-    type: 'week',
-    interval: 1,
-    dstPolicy: 'once'
-  }
+  auto.addAction({
+    name: 'Weekly Backup',
+    cmd: 'weeklyBackup',
+    date: nextSunday,
+    catchUpWindow: "unlimited", // Always run backups, even if delayed
+    repeat: {
+      type: 'week',
+      interval: 1,
+      dstPolicy: 'once'
+    }
+  });
 });
 
 // Demonstrate simulation - what will happen in the next 24 hours?

@@ -5,6 +5,53 @@ All notable changes to jw-automator will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.0] - 2025-11-18
+
+### Added
+
+- **`seed()` Method**: New bootstrapping method that runs initialization logic only when the database is empty
+  - Solves the "Bootstrapping Problem" by safely initializing actions without resetting schedules on restart
+  - Returns `true` if seeding ran, `false` if skipped
+  - Automatically saves state after seeding
+  - Perfect for system tasks that should be added once but preserved forever
+
+- **`catchUpWindow` Property**: Time-based validity window for missed executions (replaces binary buffered/unBuffered)
+  - `catchUpWindow: "unlimited"` - Catch up ALL missed executions (like old `unBuffered: false`)
+  - `catchUpWindow: 0` - Skip ALL missed executions (like old `unBuffered: true`)
+  - `catchUpWindow: 5000` - Hybrid: tolerate 5s lag, skip if offline for hours
+  - Solves the "Thundering Herd Problem" by preventing thousands of queued executions after long downtime
+  - Fast-forward optimization uses mathematical projection to instantly advance high-frequency tasks
+  - Uses `"unlimited"` string literal instead of `Infinity` for clean JSON serialization
+
+- **Defensive Validation**: "Fail loudly, run defensively" philosophy
+  - Invalid `repeat.type` → defaults to `'day'` with ERROR event
+  - Invalid `repeat.interval` → coerced to `Math.max(1, Math.floor(value))` with ERROR event
+  - Invalid `repeat.limit` → defaults to `null` (unlimited) with ERROR event
+  - Invalid `repeat.endDate` → ignored with ERROR event
+  - Invalid `catchUpWindow` → defaults to `"unlimited"` with ERROR event
+  - Negative `catchUpWindow` → coerced to `0` with ERROR event
+  - Missing `date` → defaults to 5 seconds from now with DEBUG event
+  - Unregistered commands → emit DEBUG event, keep trying (never remove action)
+
+### Changed
+
+- **Backwards Compatibility**: `unBuffered` property is now a maintained alias that maps to `catchUpWindow`
+  - `unBuffered: true` → `catchUpWindow: 0`
+  - `unBuffered: false` → `catchUpWindow: "unlimited"`
+  - `catchUpWindow: Infinity` → automatically coerced to `"unlimited"` with DEBUG event
+  - Both properties supported indefinitely with zero breaking changes
+  - `catchUpWindow` takes precedence if both are specified
+
+### Improved
+
+- Clean JSON serialization: `"unlimited"` is a string, no special JSON handling required
+- Enhanced action validation with comprehensive error/debug event emissions
+- All invalid values coerced to sensible defaults - system keeps running
+- Updated action loading to normalize `catchUpWindow` for backwards compatibility
+- Comprehensive test coverage for both new features and defensive validation
+- Updated examples to demonstrate `seed()` and `catchUpWindow` usage
+- Updated documentation with detailed usage patterns and migration guidance
+
 ## [3.0.0] - 2025-11-17
 
 ### Added (v3 Complete Rewrite)
