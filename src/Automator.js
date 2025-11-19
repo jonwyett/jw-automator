@@ -1,7 +1,7 @@
 /**
  * Automator.js
  *
- * Main API class for jw-automator v3
+ * Main API class for jw-automator v4
  */
 
 const SchedulerHost = require('./host/SchedulerHost');
@@ -135,7 +135,6 @@ class Automator {
       cmd: actionSpec.cmd,
       payload: actionSpec.payload !== undefined ? actionSpec.payload : null,
       date: startDate,
-      unBuffered: actionSpec.unBuffered !== undefined ? actionSpec.unBuffered : false,
       catchUpWindow: catchUpWindow,
       repeat: actionSpec.repeat ? { ...actionSpec.repeat } : null,
       count: 0
@@ -193,6 +192,7 @@ class Automator {
     // Re-normalize catchUpWindow if unBuffered or catchUpWindow was updated
     if ('unBuffered' in updates || 'catchUpWindow' in updates) {
       action.catchUpWindow = this._normalizeCatchUpWindow(action);
+      delete action.unBuffered; // Remove legacy property
     }
 
     this._emit('update', {
@@ -242,6 +242,7 @@ class Automator {
       // Re-normalize catchUpWindow if unBuffered or catchUpWindow was updated
       if ('unBuffered' in updates || 'catchUpWindow' in updates) {
         action.catchUpWindow = this._normalizeCatchUpWindow(action);
+        delete action.unBuffered; // Remove legacy property
       }
 
       this._emit('update', {
@@ -403,7 +404,7 @@ class Automator {
     description += `\n  Command: ${action.cmd}`;
     description += `\n  Next run: ${action.date ? action.date.toLocaleString() : 'None'}`;
     description += `\n  Executions: ${action.count}`;
-    description += `\n  Buffered: ${!action.unBuffered}`;
+    description += `\n  Catch-up Window: ${action.catchUpWindow === 'unlimited' ? 'unlimited' : `${action.catchUpWindow}ms`}`;
 
     if (action.repeat) {
       description += `\n  Recurrence: ${action.repeat.type}`;
@@ -466,14 +467,15 @@ class Automator {
     try {
       const state = this.options.storage.load();
 
-      // Normalize catchUpWindow for existing actions (for backwards compatibility)
       if (state.actions && state.actions.length > 0) {
-        state.actions = state.actions.map(action => ({
-          ...action,
-          catchUpWindow: action.catchUpWindow !== undefined
-            ? action.catchUpWindow
-            : this._normalizeCatchUpWindow(action)
-        }));
+        state.actions.forEach(action => {
+          // Set catchUpWindow if missing, using legacy unBuffered if present
+          if (action.catchUpWindow === undefined) {
+            action.catchUpWindow = this._normalizeCatchUpWindow(action);
+          }
+          // Remove legacy property after normalization
+          delete action.unBuffered;
+        });
 
         const maxId = Math.max(...state.actions.map(a => a.id || 0));
         this.nextId = maxId + 1;

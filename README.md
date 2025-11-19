@@ -495,6 +495,6 @@ MIT
 
 ## ❤️ Acknowledgments
 
-jw-automator v3 is a ground-up rethinking of the original jw-automator library, preserving the spirit while strengthening the foundations.
+jw-automator v4 is a ground-up rethinking of the original jw-automator library, preserving the spirit while strengthening the foundations.
 
 If you're building automation logic and want predictable, human-friendly scheduling that survives the real world — **welcome.**
