@@ -1,5 +1,24 @@
 # jw-automator Version History
 
+## Version 4.0.0 (Current - 2025-11-19)
+
+**Refined Defensive Defaults and Predictable Behavior**
+
+Version 4.0.0 focuses on making the Automator's behavior even more predictable and robust, especially regarding default values and error handling for action specifications.
+
+### Key Changes from v3.2.0:
+- **Smart `catchUpWindow` Defaults**: Introduces intelligent default values for `catchUpWindow` based on whether an action is one-time (defaults to `0`) or recurring (defaults to its recurrence interval). This prevents unexpected "thundering herd" scenarios.
+- **Fatal Error for Invalid `repeat.type`**: An invalid `repeat.type` (e.g., a typo) now results in an immediate, hard `Error` to ensure user intent is explicit and unambiguous.
+- **`warning` Event for Coercions**: Defensive coercions (e.g., invalid intervals, limits) now emit a `warning` event instead of an `error` event, providing clearer feedback without implying fatal issues.
+- **Refined Defensive Validation Strategy**: A more nuanced approach to validation, distinguishing between fatal configuration errors (throwing `Error`) and non-fatal data corrections (emitting `warning`).
+
+### Impact:
+- Enhances out-of-the-box predictability.
+- Reduces silent misinterpretations of user input.
+- Provides clearer error reporting for developers.
+
+---
+
 ## Version 3.0.0 (Current - 2025-11-17)
 
 **Complete clean-room rewrite**
@@ -46,7 +65,8 @@ v2 is now superseded by v3 but remains available in git history for legacy proje
 
 ```
 v2.x: Production version (legacy, widely deployed)
-v3.0: Complete rewrite (current release)
+v3.0: Complete rewrite
+v4.0: Refined Defensive Defaults (current release)
 ```
 
 ---
@@ -65,7 +85,7 @@ v3 introduces breaking changes in the API, but the core concepts remain familiar
 
 ## Current Status
 
-**Version 3.0.0** is production-ready and fully tested.
+**Version 4.0.0** is production-ready and fully tested.
 
 - ✅ 43+ tests passing
 - ✅ Complete documentation

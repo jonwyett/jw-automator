@@ -1,4 +1,4 @@
-# 📚 **jw-automator v3**
+# 📚 **jw-automator v4**
 
 ### A resilient, local-time, 1-second precision automation scheduler for Node.js
 
@@ -8,7 +8,7 @@
 
 ## ⭐️ Overview
 
-**jw-automator** is a robust automation engine designed for small devices, home automation hubs, personal servers, and Node.js environments where **correctness, resilience, and local-time behavior** matter more than millisecond precision.
+**jw-automator** is a robust automation engine designed for small devices, home automation hubs, personal servers, and Node.js environments where **correctness, resilience, and local-time behavior** matter more than millisecond precision. Version 4 introduces enhanced defensive defaults and clearer error handling, making it even more predictable and robust.
 
 Where traditional cron falls short — missed executions, poor DST handling, limited recurrence, lack of catch-up semantics — **jw-automator** provides a predictable, human-centric scheduling model:
 
@@ -139,35 +139,37 @@ This avoids cron's silent-but-surprising behaviors.
 
 ---
 
-### 4. **Resilient Offline Catch-Up with Time Windows**
+### 4. **Resilient Offline Catch-Up with Smart Defaults**
 
-When the device is offline or delayed, you can control exactly how far back to catch up using the `catchUpWindow` property:
+When the device is offline or delayed, you can control exactly how far back to catch up using the `catchUpWindow` property. Automator v4 introduces **smart defaults** that infer the desired behavior based on your action's type, making the system more robust and predictable out-of-the-box.
 
-```js
-catchUpWindow: "unlimited"  // Catch up ALL missed executions (default)
-catchUpWindow: 0            // Skip ALL missed executions (real-time only)
-catchUpWindow: 5000         // Catch up if missed by ≤5 seconds, skip if older
-```
+**`catchUpWindow` Behavior:**
+
+*   **Explicitly Set (milliseconds or `"unlimited"`):** Your explicit `catchUpWindow` value always takes precedence.
+    *   `catchUpWindow: "unlimited"`: Catch up ALL missed executions.
+    *   `catchUpWindow: 0`: Skip ALL missed executions (real-time only).
+    *   `catchUpWindow: 5000`: Catch up if missed by ≤5 seconds, skip if older.
+*   **Smart Default (Recurring Actions):** If not specified, `catchUpWindow` defaults to the **duration of the action's recurrence interval**.
+    *   Example: A `repeat: { type: 'hour', interval: 1 }` action will default to a 1-hour `catchUpWindow`. If missed by less than an hour, it runs. If missed by more, it fast-forwards to the next scheduled interval.
+*   **Smart Default (One-Time Actions):** If not specified and the action has no `repeat` property, `catchUpWindow` defaults to **`0`**.
+    *   Example: A one-time task scheduled for 2:00 AM that's missed due to downtime will not run when the server comes back online later.
 
 **How it works:**
 
-* If an action is missed by less than `catchUpWindow` milliseconds, it executes (recovers from brief glitches)
-* If missed by more than `catchUpWindow`, it's skipped and fast-forwarded (prevents thundering herd)
-* The fast-forward optimization uses mathematical projection to instantly advance high-frequency tasks
+*   If an action is missed by less than its effective `catchUpWindow`, it executes (recovers from brief glitches or short offline periods).
+*   If missed by more, it's skipped and fast-forwarded to its next future scheduled time (prevents "thundering herds" after extended outages).
+*   The fast-forward optimization uses mathematical projection to instantly advance high-frequency tasks.
 
-**Example scenarios:**
+**Events for Coercion & Validation:**
 
-* **Billing tasks:** `catchUpWindow: "unlimited"` - Never miss a charge
-* **Real-time alerts:** `catchUpWindow: 0` - Only relevant "now"
-* **Sensor readings:** `catchUpWindow: 5000` - Tolerate 5s lag, skip if system was down for hours
+*   **`warning` event:** Emitted when `catchUpWindow` or `repeat` properties are syntactically invalid and have been defensively coerced to a sensible default (e.g., negative interval becomes `1`).
+*   **`Error` (thrown):** For fundamental issues like an invalid `repeat.type` (e.g., typo like `'horu'`). This is a fatal error, as the user's intent cannot be reliably determined.
 
 **Backwards compatibility:**
 
-The legacy `unBuffered` property is still fully supported:
-```js
-unBuffered: false   // equivalent to catchUpWindow: "unlimited"
-unBuffered: true    // equivalent to catchUpWindow: 0
-```
+The legacy `unBuffered` property is still supported and maps directly to `catchUpWindow` behavior:
+*   `unBuffered: false` is equivalent to `catchUpWindow: "unlimited"`
+*   `unBuffered: true` is equivalent to `catchUpWindow: 0`
 
 ---
 
@@ -340,6 +342,7 @@ Listen to events using `automator.on(event, callback)`:
 * `action` - Action executed
 * `update` - Action added/updated/removed
 * `error` - Error occurred
+* `warning` - Non-fatal data coercion or correction occurred
 * `debug` - Debug information
 
 ```js
@@ -456,8 +459,7 @@ npm run test:coverage
 | `cmd`           | Name of registered function to execute                               |
 | `payload`       | Data passed to the command                                           |
 | `date`          | Next scheduled run time (local `Date`)                               |
-| `catchUpWindow` | Time window for catching up missed executions (default: `"unlimited"`, or milliseconds number) |
-| `unBuffered`    | Legacy: Skip missed events (`true`) or catch up (`false`)           |
+| `catchUpWindow` | Time window for catching up missed executions (smart default based on action type, or milliseconds number) |
 
 ### Repeat block:
 
@@ -472,7 +474,7 @@ npm run test:coverage
 
 ---
 
-## 🎯 Project Goals (v3)
+## 🎯 Project Goals (v4)
 
 * Deterministic behavior
 * Rock-solid DST handling

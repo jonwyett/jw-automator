@@ -1,6 +1,6 @@
 # Quick Start Guide
 
-Get up and running with jw-automator v3 in 5 minutes.
+Get up and running with jw-automator v4 in 5 minutes.
 
 ---
 
@@ -137,35 +137,52 @@ automator.addAction({
 
 ---
 
-## Buffered vs UnBuffered
+## Offline Catch-Up with `catchUpWindow`
 
-### Buffered (Default) - Catch Up Missed Events
+Automator v4 manages offline catch-up using the `catchUpWindow` property, which has smart defaults for predictable behavior.
+
+### Smart Defaults for `catchUpWindow`
+
+-   **Recurring Actions:** If `catchUpWindow` is not specified, it defaults to the **duration of the action's recurrence interval**. This ensures short delays are recovered, but long outages don't cause a "thundering herd."
+-   **One-Time Actions:** If `catchUpWindow` is not specified and the action has no `repeat` property, it defaults to **`0`** (skip if missed).
+
+### Explicit Control
+
+You can explicitly set `catchUpWindow`:
+
+-   `catchUpWindow: "unlimited"`: Catch up ALL missed executions.
+-   `catchUpWindow: 0`: Skip ALL missed executions (real-time only).
+-   `catchUpWindow: 5000`: Catch up if missed by ≤5 seconds, skip if older.
+
+#### Example: Critical Task (unlimited catch-up)
 
 ```javascript
 automator.addAction({
   name: 'Critical Task',
   cmd: 'criticalTask',
   date: new Date('2025-05-01T10:00:00'),
-  unBuffered: false, // Execute even if delayed
+  catchUpWindow: "unlimited", // Execute all missed, even if offline for long
   repeat: { type: 'hour', interval: 1 }
 });
 ```
 
 If the system is offline from 10:00 to 13:00, it will execute the 10:00, 11:00, and 12:00 occurrences when it comes back online.
 
-### UnBuffered - Skip Missed Events
+#### Example: Animation Frame (skip missed)
 
 ```javascript
 automator.addAction({
   name: 'Animation Frame',
   cmd: 'updateAnimation',
   date: new Date(),
-  unBuffered: true, // Only run if on time
+  catchUpWindow: 0, // Only run if on time
   repeat: { type: 'second', interval: 1 }
 });
 ```
 
 If the system is delayed, it won't execute missed animation frames.
+
+**Legacy `unBuffered`**: The `unBuffered` property is still supported as a direct alias for `catchUpWindow` for backwards compatibility: `unBuffered: false` maps to `catchUpWindow: "unlimited"`, and `unBuffered: true` maps to `catchUpWindow: 0`.
 
 ---
 
@@ -248,6 +265,11 @@ automator.on('update', (event) => {
 // Errors
 automator.on('error', (event) => {
   console.error('Error:', event.message);
+});
+
+// Warnings (non-fatal coercions/corrections)
+automator.on('warning', (event) => {
+  console.warn('Warning:', event.message);
 });
 ```
 
@@ -349,7 +371,7 @@ process.on('SIGINT', () => {
 - Read the full [README](../README.md)
 - Check out [examples](../examples/)
 - Review [Architecture](./ARCHITECTURE.md)
-- See [Migration Guide](./MIGRATION.md) if upgrading from v1
+- See [Migration Guide](./MIGRATION.md) if upgrading from v3
 
 ---
 

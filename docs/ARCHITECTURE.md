@@ -1,6 +1,6 @@
-# Architecture Overview
+# Architecture Overview (v4)
 
-## jw-automator v3 Architecture
+## jw-automator v4 Architecture
 
 This document describes the internal architecture of jw-automator v3.
 
@@ -244,11 +244,13 @@ Returns event list (state unchanged)
 - **Simulatable**: Preview future schedules
 - **Catch-up**: Process offline gaps identically to real-time
 
-### Why Buffered/UnBuffered?
+### Why `catchUpWindow` (and Legacy Buffered/UnBuffered)?
 
-- **Buffered**: "I want this to happen even if delayed" (e.g., turn heater off)
-- **UnBuffered**: "Only if on-time" (e.g., animations, rate limiting)
-- Both advance the recurrence chain correctly
+The `catchUpWindow` property, supported by the CoreEngine, precisely defines the time window for recovering missed actions.
+
+- **Smart Defaults**: For recurring actions, the `catchUpWindow` defaults to the action's interval (e.g., a 1-hour action has a 1-hour catch-up window). For one-time actions, it defaults to `0` (no catch-up). This prevents "thundering herd" issues by ensuring that actions too old are simply skipped.
+- **Explicit Control**: Users can still set `catchUpWindow` to `0` (skip all missed), a specific millisecond value (tolerate N ms lag), or `"unlimited"` (catch up all, like old buffered behavior).
+- **Legacy `unBuffered`**: The `unBuffered` flag (`true` or `false`) is now a legacy alias for `catchUpWindow: 0` and `catchUpWindow: "unlimited"` respectively. The system transparently maps it.
 
 ---
 

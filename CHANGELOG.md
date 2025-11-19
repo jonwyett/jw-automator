@@ -5,6 +5,28 @@ All notable changes to jw-automator will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.0] - 2025-11-19
+
+### Breaking Changes
+
+-   **Smart Default `catchUpWindow` Behavior**: The default behavior for `catchUpWindow` has fundamentally changed. Instead of defaulting to `"unlimited"`, it now defaults based on action type:
+    -   For recurring actions, it defaults to the recurrence interval duration.
+    -   For one-time actions, it defaults to `0` (no catch-up).
+    -   **Impact:** Users relying on the previous `"unlimited"` default for actions where `catchUpWindow` was not explicitly set will experience different behavior.
+-   **Invalid `repeat.type` is now a Fatal Error**: Providing a missing or invalid `repeat.type` (e.g., a typo) will now throw a hard `Error` immediately when the action is added or updated.
+    -   **Impact:** Previously, this would be defensively coerced to `'day'` with an `error` event. Code relying on this coercion will now crash.
+-   **Coercion Events changed from `error` to `warning`**: All defensive coercions (e.g., invalid `repeat.interval`, negative `catchUpWindow`, invalid `repeat.limit`) now emit a `warning` event instead of an `error` event.
+    -   **Impact:** Users listening for `automator.on('error', ...)` to catch these specific coercion notifications will need to update their code to listen for `automator.on('warning', ...)` instead.
+
+### Added
+
+-   **`warning` Event Type**: A new event type, `warning`, has been introduced for non-fatal data coercions and corrections during action validation.
+-   **Smart `catchUpWindow` Defaults**: Actions now automatically infer a sensible `catchUpWindow` default based on whether they are one-time (default `0`) or recurring (default to recurrence interval duration).
+
+### Changed
+
+-   The "Defensive Validation" strategy has been refined to distinguish between fatal configuration errors and non-fatal coercions, using `Error` throws for the former and `warning` events for the latter.
+
 ## [3.2.0] - 2025-11-18
 
 ### Added
@@ -23,15 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Fast-forward optimization uses mathematical projection to instantly advance high-frequency tasks
   - Uses `"unlimited"` string literal instead of `Infinity` for clean JSON serialization
 
-- **Defensive Validation**: "Fail loudly, run defensively" philosophy
-  - Invalid `repeat.type` → defaults to `'day'` with ERROR event
-  - Invalid `repeat.interval` → coerced to `Math.max(1, Math.floor(value))` with ERROR event
-  - Invalid `repeat.limit` → defaults to `null` (unlimited) with ERROR event
-  - Invalid `repeat.endDate` → ignored with ERROR event
-  - Invalid `catchUpWindow` → defaults to `"unlimited"` with ERROR event
-  - Negative `catchUpWindow` → coerced to `0` with ERROR event
-  - Missing `date` → defaults to 5 seconds from now with DEBUG event
-  - Unregistered commands → emit DEBUG event, keep trying (never remove action)
+- **Defensive Validation (Initial Implementation)**: Implemented "Fail loudly, run defensively" philosophy with various coercions and `error` events for invalid inputs. This initial strategy was further refined in v4.0.0, which introduced a dedicated `warning` event and stricter validation for `repeat.type`.
 
 ### Changed
 

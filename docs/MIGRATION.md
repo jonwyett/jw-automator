@@ -1,18 +1,45 @@
-# Migration Guide: v2 to v3
+# Migration Guide: v3 to v4
 
-This guide helps you migrate from jw-automator v2 to v3.
+This guide helps you migrate from jw-automator v3 to v4.
 
 ---
 
 ## Overview
 
-jw-automator v3 is a **complete clean-room rewrite** with improved semantics, better DST handling, and a cleaner API. While the core concepts remain the same, there are breaking changes from v2.
+jw-automator v4 is a significant refinement of v3's architecture, focusing on making the scheduler's behavior even more predictable and robust out-of-the-box. While v3 represented a complete rewrite, v4 introduces breaking changes by refining default behaviors and error handling for action specifications.
 
-v2 was the widely-deployed production version. v3 represents a ground-up reimplementation that preserves the philosophy while modernizing the architecture.
+v3 was the widely-deployed production version. v4 builds upon that foundation with enhanced predictability.
 
 ---
 
-## Breaking Changes
+## Breaking Changes from v3 to v4
+
+### 1. Default `catchUpWindow` Behavior Changed
+
+**v3:** If `catchUpWindow` was not specified, it defaulted to `"unlimited"` (catch up all missed executions).
+**v4:** If `catchUpWindow` is not specified, it now uses a **smart default** based on the action type:
+-   For **recurring actions**, it defaults to the **duration of the recurrence interval** (e.g., an hourly action gets a 1-hour `catchUpWindow`).
+-   For **one-time actions**, it defaults to **`0`** (skip all missed executions).
+
+**Impact:** User applications that relied on the implicit "unlimited" catch-up for all actions in v3 might now see actions being skipped or fast-forwarded more aggressively. If you desire the old "unlimited" catch-up, you must explicitly set `catchUpWindow: "unlimited"`.
+
+### 2. Invalid `repeat.type` Throws a Fatal Error
+
+**v3:** If `repeat.type` was missing or invalid (e.g., a typo like `'horu'`), Automator would defensively coerce it to `'day'` and emit an `error` event.
+**v4:** An invalid or missing `repeat.type` now throws a hard `Error` immediately.
+
+**Impact:** Code that previously succeeded by silently allowing `repeat.type` coercions will now fail fast, forcing explicit correction. This ensures that the action's intent is never misinterpreted.
+
+### 3. Coercion Events Changed from `error` to `warning`
+
+**v3:** Non-fatal defensive coercions (e.g., an invalid `repeat.interval` being set to `1`, a negative `catchUpWindow` becoming `0`) would emit an `error` event.
+**v4:** These same non-fatal coercions now emit a `warning` event. The `error` event is reserved for more critical issues (e.g., storage failures).
+
+**Impact:** If your application was listening for `automator.on('error', ...)` to catch these coercion notifications, you must now update your event listener to `automator.on('warning', ...)` to continue receiving them.
+
+---
+
+## Breaking Changes from v3 to v4
 
 ### 1. Constructor and Initialization
 
@@ -146,6 +173,20 @@ automator.updateActionByName('Old Name', {
 
 ## New Features in v3
 
+## New Features in v4
+
+### 1. Smart `catchUpWindow` Defaults
+
+The new intelligent default system for `catchUpWindow` means that for most actions, you no longer need to explicitly define this property to get predictable, sensible behavior. It automatically adapts based on whether your action is one-time or recurring.
+
+### 2. Dedicated `warning` Event
+
+A new `warning` event (`automator.on('warning', ...)`) provides a clearer channel for non-fatal feedback about defensive coercions. This allows developers to distinguish between critical runtime errors and minor data corrections.
+
+---
+
+## New Features in v3
+
 ### 1. Simulation
 
 Preview future schedules without running them:
@@ -232,180 +273,47 @@ const automator = new Automator({
 
 ---
 
-## Migration Steps
+## Migration Steps (v3 to v4)
 
-### Step 1: Update Initialization
+### Step 1: Understand Breaking Changes
 
-Replace your v2 initialization with v3 constructor:
+Thoroughly review the "Breaking Changes from v3 to v4" section above. Identify which changes affect your application.
 
-```javascript
-// Before
-const automator = require('jw-automator');
-automator.init({ file: './actions.json' });
+### Step 2: Review `catchUpWindow` Usage
 
-// After
-const Automator = require('jw-automator');
-const automator = new Automator({
-  storage: Automator.storage.file('./actions.json')
-});
-```
+If your v3 application relied on the implicit "unlimited" catch-up for actions where `catchUpWindow` was not explicitly set, you will need to:
 
-### Step 2: Update Action Definitions
-
-Add `dstPolicy` to actions with repeat:
-
-```javascript
-// Before
-automator.addAction({
-  cmd: 'myCmd',
-  date: new Date(),
-  repeat: { type: 'day', interval: 1 }
-});
-
-// After
-automator.addAction({
-  cmd: 'myCmd',
-  date: new Date(),
-  repeat: {
-    type: 'day',
-    interval: 1,
-    dstPolicy: 'once' // Explicitly choose DST behavior
-  }
-});
-```
+-   **Explicitly set `catchUpWindow: "unlimited"`** for those actions if you wish to maintain the old behavior.
+-   Otherwise, understand that these actions will now use the new smart defaults (recurrence interval for recurring, `0` for one-time actions).
 
 ### Step 3: Update Event Listeners
 
-Standardize event names:
+If your application was listening for `automator.on('error', ...)` to catch notifications about defensive coercions (e.g., invalid `repeat.interval`), you must now update your code to listen for `automator.on('warning', ...)` to receive these non-fatal messages.
 
-```javascript
-// Before
-automator.on('actionExecuted', (data) => { ... });
+### Step 4: Correct Invalid `repeat.type` Definitions
 
-// After
-automator.on('action', (event) => { ... });
-```
-
-### Step 4: Update API Calls
-
-Use new method names:
-
-```javascript
-// Before
-automator.removeAction(id);
-
-// After
-automator.removeActionByID(id);
-```
-
-### Step 5: Test DST Behavior
-
-Review actions that run during DST transitions and set appropriate `dstPolicy`:
-
-- `'once'` - Run only the first occurrence during fall-back (recommended default)
-- `'twice'` - Run both occurrences during fall-back
-
-### Step 6: Leverage New Features
-
-Consider using:
-- `getActionsInRange()` for calendar previews
-- `describeAction()` for debugging
-- Custom storage adapters for database persistence
-- Update events for logging changes
+If your application previously used actions with invalid or missing `repeat.type` values that were silently corrected in v3, you must now explicitly fix these `repeat.type` values. Failure to do so will result in a hard `Error` when the action is added or updated in v4.
 
 ---
 
 ## Compatibility Notes
 
-### What's the Same
+### What's the Same (v3 to v4)
 
-- **Core concept**: Schedule actions with recurrence
-- **Recurrence types**: second, minute, hour, day, week, month, year
-- **Local time**: Still operates in local time
-- **Buffered/unbuffered**: Still supported (as `unBuffered` flag)
-- **Function registration**: Still use `addFunction()`
+-   **Core concepts**: Schedule actions with recurrence
+-   **Recurrence types**: `second`, `minute`, `hour`, `day`, `week`, `month`, `year`
+-   **Local time**: Still operates in local time
+-   **API methods**: Names and signatures of `addAction()`, `updateActionByID()`, etc., remain the same.
+-   **Function registration**: Still use `addFunction()`
+-   **Legacy `unBuffered`**: Still supported as an alias, mapping to `catchUpWindow`.
 
-### What's Different
+### What's Different (v3 to v4)
 
-- **Constructor**: Now uses `new Automator()`
-- **Storage**: Explicitly configured
-- **DST**: Explicit policy required
-- **Events**: Standardized names and payloads
-- **API**: More consistent naming (`ByID`, `ByName`)
-- **IDs**: Auto-generated, not user-provided
-- **State**: Better separation of spec vs. state
-
----
-
-## Example: Complete Migration
-
-**v2 Code:**
-```javascript
-const automator = require('jw-automator');
-automator.init({ file: './actions.json' });
-
-automator.addFunction('turnLightOn', () => {
-  console.log('Light on');
-});
-
-automator.addAction({
-  cmd: 'turnLightOn',
-  date: new Date('2025-05-01T07:00:00'),
-  repeat: { type: 'day', interval: 1 }
-});
-
-automator.start();
-```
-
-**v3 Code:**
-```javascript
-const Automator = require('jw-automator');
-
-const automator = new Automator({
-  storage: Automator.storage.file('./actions.json')
-});
-
-automator.addFunction('turnLightOn', () => {
-  console.log('Light on');
-});
-
-automator.addAction({
-  name: 'Morning Lights',
-  cmd: 'turnLightOn',
-  date: new Date('2025-05-01T07:00:00'),
-  unBuffered: false,
-  repeat: {
-    type: 'day',
-    interval: 1,
-    dstPolicy: 'once'
-  }
-});
-
-automator.start();
-```
+-   **`catchUpWindow` Default Behavior**: Now smart and context-aware, instead of always `"unlimited"`.
+-   **`repeat.type` Validation**: Invalid types now throw a fatal `Error`.
+-   **Event Handling**: Coercions now emit `warning` events instead of `error` events.
+-   **Defensive Defaults Philosophy**: More refined and explicit.
 
 ---
 
 ## Getting Help
-
-If you encounter issues during migration:
-
-1. Check the [README](../README.md) for full API documentation
-2. Review the [Architecture](./ARCHITECTURE.md) for design understanding
-3. Run the examples in the `examples/` directory
-4. File an issue on GitHub
-
----
-
-## Why Rewrite?
-
-v3 addresses several issues from v2:
-
-- **Infinite loops**: Better safety guards
-- **DST bugs**: Explicit, predictable handling
-- **Catch-up logic**: More reliable offline behavior
-- **Testability**: Deterministic core engine
-- **Maintainability**: Cleaner architecture
-- **Extensibility**: Pluggable storage, better API
-
-The rewrite provides a solid foundation for long-term reliability.

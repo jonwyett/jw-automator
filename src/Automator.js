@@ -192,10 +192,7 @@ class Automator {
 
     // Re-normalize catchUpWindow if unBuffered or catchUpWindow was updated
     if ('unBuffered' in updates || 'catchUpWindow' in updates) {
-      action.catchUpWindow = this._normalizeCatchUpWindow({
-        catchUpWindow: action.catchUpWindow,
-        unBuffered: action.unBuffered
-      });
+      action.catchUpWindow = this._normalizeCatchUpWindow(action);
     }
 
     this._emit('update', {
@@ -244,10 +241,7 @@ class Automator {
 
       // Re-normalize catchUpWindow if unBuffered or catchUpWindow was updated
       if ('unBuffered' in updates || 'catchUpWindow' in updates) {
-        action.catchUpWindow = this._normalizeCatchUpWindow({
-          catchUpWindow: action.catchUpWindow,
-          unBuffered: action.unBuffered
-        });
+        action.catchUpWindow = this._normalizeCatchUpWindow(action);
       }
 
       this._emit('update', {
@@ -524,6 +518,43 @@ class Automator {
     }, this.options.saveInterval);
   }
 
+
+  /**
+   * Calculate interval in milliseconds from a repeat spec.
+   * Note: Uses approximations for month/year, as this is for a default
+   * catch-up window, not for precise scheduling.
+   *
+   * @param {object} repeat
+   * @returns {number}
+   * @private
+   */
+  _getIntervalMilliseconds(repeat) {
+    const interval = repeat.interval || 1;
+    switch (repeat.type) {
+      case 'second':
+        return interval * 1000;
+      case 'minute':
+        return interval * 60 * 1000;
+      case 'hour':
+        return interval * 60 * 60 * 1000;
+      case 'day':
+      case 'weekday': // Approximated as 1 day for catch-up purposes
+      case 'weekend': // Approximated as 1 day for catch-up purposes
+        return interval * 24 * 60 * 60 * 1000;
+      case 'week':
+        return interval * 7 * 24 * 60 * 60 * 1000;
+      case 'month':
+        // A reasonable approximation for a default is 30 days
+        return interval * 30 * 24 * 60 * 60 * 1000;
+      case 'year':
+        // A reasonable approximation for a default is 365 days
+        return interval * 365 * 24 * 60 * 60 * 1000;
+      default:
+        // Fallback for an invalid type that slipped past validation
+        return 60000; // 1 minute
+    }
+  }
+
   /**
    * Normalize catchUpWindow property (handles backwards compatibility with unBuffered)
    *
@@ -536,7 +567,7 @@ class Automator {
    * @returns {string|number} - Normalized catchUpWindow value ("unlimited" or milliseconds)
    */
   _normalizeCatchUpWindow(spec) {
-    // New property takes precedence
+    // 1. New property takes precedence
     if (spec.catchUpWindow !== undefined) {
       // Coerce Infinity to "unlimited" (backwards compatibility)
       if (spec.catchUpWindow === Infinity) {
@@ -549,13 +580,18 @@ class Automator {
       return spec.catchUpWindow;
     }
 
-    // Backwards compatibility mapping
+    // 2. Backwards compatibility mapping for legacy 'unBuffered'
     if (spec.unBuffered !== undefined) {
       return spec.unBuffered ? 0 : "unlimited";
     }
 
-    // Default: catch up everything (current buffered behavior)
-    return "unlimited";
+    // 3. For recurring actions, default to the interval duration
+    if (spec.repeat) {
+      return this._getIntervalMilliseconds(spec.repeat);
+    }
+
+    // 4. For one-time actions, default to 0 (no catch-up)
+    return 0;
   }
 
   /**
@@ -573,14 +609,9 @@ class Automator {
     if (action.repeat) {
       const validTypes = ['second', 'minute', 'hour', 'day', 'weekday', 'weekend', 'week', 'month', 'year'];
 
-      // Defensive: Coerce invalid repeat.type to 'day' with ERROR event
+      // CRITICAL: An invalid repeat.type is a fatal error, as intent is lost.
       if (!action.repeat.type || !validTypes.includes(action.repeat.type)) {
-        this._emit('error', {
-          type: 'error',
-          message: `Invalid repeat.type "${action.repeat.type}" - defaulting to "day"`,
-          actionSpec: action
-        });
-        action.repeat.type = 'day';
+        throw new Error(`Invalid repeat.type "${action.repeat.type}". Must be one of: ${validTypes.join(', ')}`);
       }
 
       // Defensive: Coerce invalid interval to Math.max(1, Math.floor(value))
@@ -588,8 +619,8 @@ class Automator {
         const original = action.repeat.interval;
         const coerced = Math.max(1, Math.floor(original));
         if (original !== coerced) {
-          this._emit('error', {
-            type: 'error',
+          this._emit('warning', {
+            type: 'warning',
             message: `Invalid repeat.interval ${original} - coerced to ${coerced}`,
             actionSpec: action
           });
@@ -599,19 +630,19 @@ class Automator {
 
       // Defensive: Validate dstPolicy
       if (action.repeat.dstPolicy && !['once', 'twice'].includes(action.repeat.dstPolicy)) {
-        this._emit('error', {
-          type: 'error',
+        this._emit('warning', {
+          type: 'warning',
           message: `Invalid dstPolicy "${action.repeat.dstPolicy}" - defaulting to "once"`,
           actionSpec: action
         });
         action.repeat.dstPolicy = 'once';
       }
 
-      // Defensive: Coerce invalid repeat.limit to null (unlimited) with ERROR event
+      // Defensive: Coerce invalid repeat.limit to null (unlimited) with WARNING event
       if (action.repeat.limit !== undefined && action.repeat.limit !== null) {
         if (typeof action.repeat.limit !== 'number' || action.repeat.limit < 1) {
-          this._emit('error', {
-            type: 'error',
+          this._emit('warning', {
+            type: 'warning',
             message: `Invalid repeat.limit ${action.repeat.limit} - defaulting to null (unlimited)`,
             actionSpec: action
           });
@@ -624,8 +655,8 @@ class Automator {
         try {
           new Date(action.repeat.endDate);
         } catch (e) {
-          this._emit('error', {
-            type: 'error',
+          this._emit('warning', {
+            type: 'warning',
             message: `Invalid repeat.endDate - ignoring`,
             actionSpec: action
           });
@@ -642,8 +673,8 @@ class Automator {
 
       // Coerce negative numbers to 0 FIRST
       if (isNumber && action.catchUpWindow < 0) {
-        this._emit('error', {
-          type: 'error',
+        this._emit('warning', {
+          type: 'warning',
           message: `Negative catchUpWindow ${action.catchUpWindow} - coerced to 0`,
           actionSpec: action
         });
@@ -651,8 +682,8 @@ class Automator {
       }
       // Then validate it's a valid value
       else if (!isValidString && !isNumber && !isInfinity) {
-        this._emit('error', {
-          type: 'error',
+        this._emit('warning', {
+          type: 'warning',
           message: `Invalid catchUpWindow "${action.catchUpWindow}" - defaulting to "unlimited"`,
           actionSpec: action
         });
