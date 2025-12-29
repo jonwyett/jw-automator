@@ -1,8 +1,3 @@
-🚀 What Could Be Improved (Future Enhancements)
-
-None of these are required — your rewrite is already excellent.
-These are “v2.1/v3” future improvements:
-
 1. DSL for recurrence rules
 
 Human-friendly rules like 'every weekday at 7:00'.
@@ -26,3 +21,23 @@ Grouping related actions so they can be suspended/resumed together.
 6. Real-time drift monitoring
 
 Detecting if ticks consistently fall behind.
+
+7. [RESOLVED] action->task
+
+8. re-visit errors for bad tasks (when a user specifies them wrong)
+
+9. MISSING
+
+10. [RESOLVED] minSaveIntervalMs vs saveInterval: we want a 'debounce' for saving tasks that happen quickly and also only to update the store when something actually happens, not 'every N seconds' for no reason. this is for file-storage only, not in-memory, so we may need to decouple this logic. There is "first boot sim" = save when done, changes to the task list (CRUD) = immediate. and then a debounce so that tasks that run every second only save to disk every minute or something like that.
+
+11. [RESOLVED] catchup macros.
+
+12. [RESOLVED] Boot mode: 
+On the very first scheduler tick after program start, the automator enters a “boot” state.
+During boot, the scheduler performs its normal slot advancement to bring all tasks up to the present time, but suppresses all task execution.
+After the boot sweep reaches “now”, the automator exits boot mode and runs normally.
+This ensures large offline gaps never cause “catch-up storms” or accidental replay of stale events, while still preserving deterministic state advancement for all tasks.
+
+13. [RESOLVED] remove storage adapter
+
+14. boot mode logging (catchup logging really)

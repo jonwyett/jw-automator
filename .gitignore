@@ -152,6 +152,7 @@ CLAUDE.md
 dev-archive/
 #dev/
 backup/
+__backup__/
 mdCreator.js
 
 # Example action files

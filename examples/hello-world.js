@@ -8,7 +8,7 @@ const Automator = require('../index');
 
 // Create automator (in-memory, no persistence)
 const automator = new Automator({
-  storage: Automator.storage.memory()
+  // No storageFile = memory-only mode
 });
 
 // Register a function
@@ -17,7 +17,7 @@ automator.addFunction('sayHello', function() {
 });
 
 // Add an action that runs every 3 seconds, 5 times
-automator.addAction({
+automator.addTask({
   cmd: 'sayHello',
   date: new Date(Date.now() + 1000), // Start in 1 second
   repeat: {

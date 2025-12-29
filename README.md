@@ -1,4 +1,4 @@
-# 📚 **jw-automator v4**
+# **jw-automator v6**
 
 ### A resilient, local-time, 1-second precision automation scheduler for Node.js
 
@@ -6,9 +6,9 @@
 
 ---
 
-## ⭐️ Overview
+## Overview
 
-**jw-automator** is a robust automation engine designed for small devices, home automation hubs, personal servers, and Node.js environments where **correctness, resilience, and local-time behavior** matter more than millisecond precision. Version 4 introduces enhanced defensive defaults and clearer error handling, making it even more predictable and robust.
+**jw-automator** is a robust automation engine designed for small devices, home automation hubs, personal servers, and Node.js environments where **correctness, resilience, and local-time behavior** matter more than millisecond precision. Version 6 introduces result-based error handling with structured error codes, making it ideal for web interfaces and ensuring the scheduler never crashes your application.
 
 Where traditional cron falls short — missed executions, poor DST handling, limited recurrence, lack of catch-up semantics — **jw-automator** provides a predictable, human-centric scheduling model:
 
@@ -18,7 +18,7 @@ Where traditional cron falls short — missed executions, poor DST handling, lim
 * **Offline resiliency & catch-up logic**
 * **Buffered/unBuffered execution policies**
 * **Rich introspection and event lifecycle**
-* **Meta-actions** that can dynamically create/update other actions
+* **Meta-tasks** that can dynamically create/update other tasks
 * **Pluggable persistence** (file, memory, custom storage)
 * **Deterministic step engine** suitable for simulation/testing
 
@@ -35,7 +35,7 @@ jw-automator v3 is a **clean-room re-architecture** of the original library, kee
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Installation
 
@@ -50,7 +50,7 @@ const Automator = require('jw-automator');
 
 // Create an automator with file-based persistence
 const automator = new Automator({
-  storage: Automator.storage.file('./actions.json')
+  storage: Automator.storage.file('./tasks.json')
 });
 
 // Register a command function
@@ -58,14 +58,14 @@ automator.addFunction('turnLightOn', function(payload) {
   console.log('Turning light on');
 });
 
-// Seed initial actions (runs only on first use)
+// Seed initial tasks (runs only on first use)
 automator.seed((auto) => {
-  auto.addAction({
+  auto.addTask({
     name: 'Morning Lights',
     cmd: 'turnLightOn',
     date: new Date('2025-05-01T07:00:00'),
     payload: null,
-    catchUpWindow: 60000, // Tolerate 1 minute of lag
+    catchUpMode: 'default', // Use default catch-up behavior
     repeat: {
       type: 'day',
       interval: 1,
@@ -82,7 +82,7 @@ automator.start();
 
 ---
 
-## 🔥 Features
+## Features
 
 ### 1. **True 1-Second Precision**
 
@@ -98,7 +98,7 @@ automator.start();
 
 ### 2. **Human-Friendly Recurrence Rules**
 
-Each action can specify a recurrence like:
+Each task can specify a recurrence like:
 
 ```js
 repeat: {
@@ -139,31 +139,38 @@ This avoids cron's silent-but-surprising behaviors.
 
 ---
 
-### 4. **Resilient Offline Catch-Up with Smart Defaults**
+### 4. **Resilient Catch-Up with `catchUpMode`**
 
-When the device is offline or delayed, you can control exactly how far back to catch up using the `catchUpWindow` property. Automator v4 introduces **smart defaults** that infer the desired behavior based on your action's type, making the system more robust and predictable out-of-the-box.
+By default, `jw-automator` is resilient to minor event loop delays and jitter. This is managed through a simple `catchUpMode` property on each task, which makes behavior predictable without needing to configure complex settings.
 
-**`catchUpWindow` Behavior:**
+**`catchUpMode` (The Easy Way)**
 
-*   **Explicitly Set (milliseconds or `"unlimited"`):** Your explicit `catchUpWindow` value always takes precedence.
-    *   `catchUpWindow: "unlimited"`: Catch up ALL missed executions.
-    *   `catchUpWindow: 0`: Skip ALL missed executions (real-time only).
-    *   `catchUpWindow: 5000`: Catch up if missed by ≤5 seconds, skip if older.
-*   **Smart Default (Recurring Actions):** If not specified, `catchUpWindow` defaults to the **duration of the action's recurrence interval**.
-    *   Example: A `repeat: { type: 'hour', interval: 1 }` action will default to a 1-hour `catchUpWindow`. If missed by less than an hour, it runs. If missed by more, it fast-forwards to the next scheduled interval.
-*   **Smart Default (One-Time Actions):** If not specified and the action has no `repeat` property, `catchUpWindow` defaults to **`0`**.
-    *   Example: A one-time task scheduled for 2:00 AM that's missed due to downtime will not run when the server comes back online later.
+This is the recommended way to control catch-up behavior.
 
-**How it works:**
+*   `catchUpMode: 'default'` (System-wide default)
+    *   **Behavior:** Provides a small buffer for tasks to recover from brief delays. If a task is missed by a few moments, it will run. If it's missed by a long time (e.g., the system was off), it will be skipped.
+    *   **Implementation:** Sets `catchUpWindow: 500` (milliseconds) and `catchUpLimit: 1`.
+    *   **Use Case:** The best setting for most tasks. It prevents tasks from being skipped due to normal system fluctuations.
 
-*   If an action is missed by less than its effective `catchUpWindow`, it executes (recovers from brief glitches or short offline periods).
-*   If missed by more, it's skipped and fast-forwarded to its next future scheduled time (prevents "thundering herds" after extended outages).
-*   The fast-forward optimization uses mathematical projection to instantly advance high-frequency tasks.
+*   `catchUpMode: 'realtime'`
+    *   **Behavior:** The task will only run if the scheduler ticks at its exact scheduled second. If the event loop is busy and the moment is missed, the task is skipped.
+    *   **Implementation:** Sets `catchUpWindow: 0` and `catchUpLimit: 0`.
+    *   **Use Case:** For tasks where executing late is worse than not executing at all.
 
-**Events for Coercion & Validation:**
+You can also set a system-wide default in the constructor:
+```js
+const automator = new Automator({
+  defaultCatchUpMode: 'realtime' // Make all tasks realtime by default
+});
+```
 
-*   **`warning` event:** Emitted when `catchUpWindow` or `repeat` properties are syntactically invalid and have been defensively coerced to a sensible default (e.g., negative interval becomes `1`).
-*   **`Error` (thrown):** For fundamental issues like an invalid `repeat.type` (e.g., typo like `'horu'`). This is a fatal error, as the user's intent cannot be reliably determined.
+**`catchUpWindow` (The Advanced Way)**
+
+For more advanced control, you can bypass `catchUpMode` and set `catchUpWindow` directly. An explicit `catchUpWindow` value on a task will always take precedence.
+
+*   `catchUpWindow: 0`: Skip ALL missed executions (same as `catchUpMode: 'realtime'`).
+*   `catchUpWindow: 5000`: Catch up if missed by ≤5 seconds, skip if older.
+*   `catchUpWindow: "unlimited"`: Catch up ALL missed executions.
 
 **Backwards compatibility:**
 
@@ -187,7 +194,7 @@ This powers:
 * Offline catch-up
 * Future schedule simulation
 * Testing
-* Meta-scheduling (actions that schedule other actions)
+* Meta-scheduling (tasks that schedule other tasks)
 
 Because `step` is deterministic, you can:
 
@@ -198,21 +205,21 @@ Because `step` is deterministic, you can:
 
 ---
 
-### 6. **Meta-Actions (Actions that Create Actions)**
+### 6. **Meta-Tasks (Tasks that Create Tasks)**
 
-jw-automator treats actions as **data**, enabling higher-order patterns:
+jw-automator treats tasks as **data**, enabling higher-order patterns:
 
-* A daily 7:00 AM action can spawn a sequence of 60 one-per-second actions.
-* A monthly billing action can create daily reminder actions.
-* A multi-step animation (e.g., dimming a light) can create timed sub-actions.
+* A daily 7:00 AM task can spawn a sequence of 60 one-per-second tasks.
+* A monthly billing task can create daily reminder tasks.
+* A multi-step animation (e.g., dimming a light) can create timed sub-tasks.
 
-Actions have a `repeat.count` that can be pre-set or manipulated intentionally.
+Tasks have a `repeat.count` that can be pre-set or manipulated intentionally.
 
 This makes jw-automator more like a *mini automation runtime* than just a cron clone.
 
 ---
 
-## 📐 API Reference
+## API Reference
 
 ### Constructor
 
@@ -224,17 +231,18 @@ Options:
 * `storage` - Storage adapter (default: memory)
 * `autoSave` - Auto-save state (default: true)
 * `saveInterval` - Save interval in ms (default: 5000)
+* `defaultCatchUpMode` - The default catch-up behavior for all tasks (`'default'` or `'realtime'`). Defaults to `'default'`.
 
 ### Methods
 
 #### `seed(callback)`
-Seed the automator with initial actions. Runs only when the database is empty (first use).
+Seed the automator with initial tasks. Runs only when the database is empty (first use).
 
-**Returns:** `boolean` - `true` if seeding ran, `false` if skipped
+**Returns:** Result object with `{ success: true, seeded: boolean }` or `{ success: false, error: string, code: string }`
 
 ```js
-automator.seed((auto) => {
-  auto.addAction({
+const result = automator.seed((auto) => {
+  auto.addTask({
     name: 'Daily Report',
     cmd: 'generateReport',
     date: new Date('2025-01-01T09:00:00'),
@@ -242,11 +250,19 @@ automator.seed((auto) => {
     repeat: { type: 'day', interval: 1 }
   });
 });
+
+if (result.success && result.seeded) {
+  console.log('Database seeded successfully');
+} else if (result.success) {
+  console.log('Database already populated - seeding skipped');
+} else {
+  console.error('Seed failed:', result.error);
+}
 ```
 
 **Why use seed()?**
 
-* Solves the bootstrapping problem: safely initialize actions without resetting the schedule on every restart
+* Solves the bootstrapping problem: safely initialize tasks without resetting the schedule on every restart
 * Preserves user-modified schedules perfectly
 * Runs initialization logic only once in the application lifecycle
 * Automatically saves state after seeding
@@ -266,16 +282,18 @@ automator.addFunction('myCommand', function(payload, event) {
 });
 ```
 
-#### `addAction(actionSpec)`
-Add a new action. Returns the action ID.
+#### `addTask(taskSpec)`
+Add a new task.
+
+**Returns:** Result object with `{ success: true, id: number }` or `{ success: false, error: string, code: string }`
 
 ```js
-const id = automator.addAction({
-  name: 'My Action',
+const result = automator.addTask({
+  name: 'My Task',
   cmd: 'myCommand',
   date: new Date('2025-05-01T10:00:00'),
   payload: { data: 'value' },
-  unBuffered: false,
+  catchUpMode: 'default',
   repeat: {
     type: 'hour',
     interval: 2,
@@ -283,47 +301,93 @@ const id = automator.addAction({
     dstPolicy: 'once'
   }
 });
+
+if (result.success) {
+  console.log('Task added with ID:', result.id);
+} else {
+  console.error('Failed to add task:', result.error);
+}
 ```
 
-#### `updateActionByID(id, updates)`
-Update an existing action.
+#### `updateTaskByID(id, updates)`
+Update an existing task.
+
+**Returns:** Result object with `{ success: true, id: number, task: object }` or `{ success: false, error: string, code: string }`
 
 ```js
-automator.updateActionByID(1, {
+const result = automator.updateTaskByID(1, {
   name: 'Updated Name',
   repeat: { type: 'day', interval: 1 }
 });
+
+if (result.success) {
+  console.log('Task updated:', result.id);
+} else {
+  console.error('Failed to update task:', result.error);
+}
 ```
 
-#### `updateActionByName(name, updates)`
-Update all actions with the given name. Returns the number of actions updated.
+#### `updateTaskByName(name, updates)`
+Update all tasks with the given name.
+
+**Returns:** Result object with `{ success: true, count: number }` or `{ success: false, error: string, code: string }`
 
 ```js
-automator.updateActionByName('My Action', {
+const result = automator.updateTaskByName('My Task', {
   payload: { newData: 'newValue' }
 });
+
+if (result.success) {
+  console.log(`Updated ${result.count} task(s)`);
+} else {
+  console.error('Failed to update tasks:', result.error);
+}
 ```
 
-#### `removeActionByID(id)`
-Remove an action by ID.
+#### `removeTaskByID(id)`
+Remove a task by ID.
 
-#### `removeActionByName(name)`
-Remove all actions with the given name.
-
-#### `getActions()`
-Get all actions (deep copy).
-
-#### `getActionsByName(name)`
-Get actions by name.
-
-#### `getActionByID(id)`
-Get a specific action by ID.
-
-#### `getActionsInRange(startDate, endDate, callback)`
-Simulate actions in a time range.
+**Returns:** Result object with `{ success: true, id: number, task: object }` or `{ success: false, error: string, code: string }`
 
 ```js
-const events = automator.getActionsInRange(
+const result = automator.removeTaskByID(1);
+
+if (result.success) {
+  console.log('Task removed:', result.id);
+} else {
+  console.error('Failed to remove task:', result.error);
+}
+```
+
+#### `removeTaskByName(name)`
+Remove all tasks with the given name.
+
+**Returns:** Result object with `{ success: true, count: number }` or `{ success: false, error: string, code: string }`
+
+```js
+const result = automator.removeTaskByName('My Task');
+
+if (result.success) {
+  console.log(`Removed ${result.count} task(s)`);
+} else {
+  console.error('Failed to remove tasks:', result.error);
+}
+```
+
+#### `getTasks()`
+Get all tasks (deep copy).
+
+#### `getTasksByName(name)`
+Get tasks by name.
+
+#### `getTaskByID(id)`
+Get a specific task by ID.
+
+#### `getTasksInRange(startDate, endDate, callback)`
+Simulate tasks in a time range.
+
+```js
+const events = automator.getTasksInRange(
   new Date('2025-05-01'),
   new Date('2025-05-07')
 );
@@ -331,72 +395,296 @@ const events = automator.getActionsInRange(
 console.log(events); // Array of scheduled events
 ```
 
-#### `describeAction(id)`
-Get a human-readable description of an action.
+#### `describeTask(id)`
+Get a human-readable description of a task.
 
 ### Events
 
 Listen to events using `automator.on(event, callback)`:
 
 * `ready` - Scheduler started
-* `action` - Action executed
-* `update` - Action added/updated/removed
+* `task` - Task executed
+* `update` - Task added/updated/removed
 * `error` - Error occurred
 * `warning` - Non-fatal data coercion or correction occurred
 * `debug` - Debug information
 
 ```js
-automator.on('action', (event) => {
-  console.log('Action executed:', event.name);
+automator.on('task', (event) => {
+  console.log('Task executed:', event.name);
   console.log('Scheduled:', event.scheduledTime);
   console.log('Actual:', event.actualTime);
 });
 ```
 
-### Storage Adapters
+---
 
-#### File Storage
+## Error Handling (v6.0+)
+
+Starting with v6.0, all CRUD methods return **result objects** instead of throwing errors. This design ensures:
+
+1. **Never crashes your application** - No exceptions thrown for validation errors
+2. **Synchronous error reporting** - Get immediate feedback for web interface integration
+3. **Structured error codes** - Enable programmatic error handling
+4. **Predictable behavior** - All methods follow the same pattern
+
+### Result Object Pattern
+
+All mutation methods (`addTask`, `updateTaskByID`, `updateTaskByName`, `removeTaskByID`, `removeTaskByName`, `seed`) return a result object:
+
+#### Success Response
 
 ```js
-const automator = new Automator({
-  storage: Automator.storage.file('./actions.json')
+const result = automator.addTask({
+  cmd: 'myCommand',
+  date: new Date()
 });
+
+// Success structure:
+// {
+//   success: true,
+//   id: 1              // for addTask, updateTaskByID, removeTaskByID
+//   count: 2,          // for updateTaskByName, removeTaskByName
+//   seeded: true,      // for seed()
+//   task: {...}        // optional - the task object
+// }
+
+if (result.success) {
+  console.log('Task added with ID:', result.id);
+}
 ```
 
-#### Memory Storage
+#### Error Response
 
 ```js
-const automator = new Automator({
-  storage: Automator.storage.memory()
+const result = automator.addTask({
+  name: 'Invalid Task'
+  // Missing required 'cmd' property
 });
+
+// Error structure:
+// {
+//   success: false,
+//   error: "Task must have a cmd property",
+//   code: "MISSING_CMD",
+//   field: "cmd"       // optional - which field caused the error
+// }
+
+if (!result.success) {
+  console.error(`Error: ${result.error} (${result.code})`);
+}
 ```
 
-#### Custom Storage
+### Error Codes Reference
+
+| Code | Description | Affected Methods |
+|------|-------------|------------------|
+| `MISSING_CMD` | Required `cmd` property missing | `addTask` |
+| `INVALID_REPEAT_TYPE` | Invalid or missing `repeat.type` | `addTask`, `updateTaskByID`, `updateTaskByName` |
+| `INVALID_CATCHUP_WINDOW` | Invalid `catchUpWindow` value | `addTask`, `updateTaskByID`, `updateTaskByName` |
+| `INVALID_CATCHUP_LIMIT` | Invalid `catchUpLimit` value | `addTask`, `updateTaskByID`, `updateTaskByName` |
+| `TASK_NOT_FOUND` | Task ID not found | `updateTaskByID`, `removeTaskByID` |
+| `NO_TASKS_FOUND` | No tasks with given name | `removeTaskByName` |
+| `INVALID_CALLBACK` | Callback is not a function | `seed` |
+
+### Web Interface Integration Example
+
+The result object pattern makes it easy to integrate with web APIs:
 
 ```js
-const automator = new Automator({
-  storage: {
-    load: function() {
-      // Return { actions: [...] }
-    },
-    save: function(state) {
-      // Save state
-    }
+const express = require('express');
+const app = express();
+
+// Add task endpoint
+app.post('/api/tasks', (req, res) => {
+  const result = automator.addTask(req.body);
+
+  if (result.success) {
+    res.json({
+      message: 'Task created successfully',
+      taskId: result.id
+    });
+  } else {
+    res.status(400).json({
+      error: result.error,
+      code: result.code,
+      field: result.field // helpful for form validation
+    });
   }
+});
+
+// Update task endpoint
+app.put('/api/tasks/:id', (req, res) => {
+  const result = automator.updateTaskByID(
+    parseInt(req.params.id),
+    req.body
+  );
+
+  if (result.success) {
+    res.json({
+      message: 'Task updated successfully',
+      task: result.task
+    });
+  } else {
+    const status = result.code === 'TASK_NOT_FOUND' ? 404 : 400;
+    res.status(status).json({
+      error: result.error,
+      code: result.code
+    });
+  }
+});
+
+// Delete task endpoint
+app.delete('/api/tasks/:id', (req, res) => {
+  const result = automator.removeTaskByID(parseInt(req.params.id));
+
+  if (result.success) {
+    res.json({
+      message: 'Task deleted successfully',
+      taskId: result.id
+    });
+  } else {
+    res.status(404).json({
+      error: result.error,
+      code: result.code
+    });
+  }
+});
+```
+
+### Validation Rules
+
+The following validation rules apply:
+
+**Fatal Errors** (return error result):
+- Missing `cmd` property
+- Invalid `repeat.type` (must be: second, minute, hour, day, weekday, weekend, week, month, year)
+- Invalid `catchUpWindow` (must be "unlimited" or non-negative number)
+- Invalid `catchUpLimit` (must be "all" or non-negative integer)
+- Task not found (for update/remove by ID)
+
+**Defensive Coercions** (emit warnings but allow task):
+- Invalid `repeat.interval` → coerced to valid integer (minimum 1)
+- Invalid `repeat.limit` → coerced to `null` (unlimited)
+- Invalid `repeat.endDate` → coerced to `null`
+- Invalid `repeat.dstPolicy` → coerced to `'once'`
+- Missing `date` → defaults to 5 seconds in future
+
+**Silent Defaults** (emit debug):
+- Missing `catchUpWindow` → smart default based on task type
+- Missing `repeat.interval` → defaults to 1
+
+### Event-Based Error Monitoring
+
+In addition to returning result objects, the automator still emits error events for logging and monitoring:
+
+```js
+automator.on('error', (event) => {
+  console.error('Validation error:', event.message);
+  console.error('Error code:', event.code);
+
+  // Log to external monitoring service
+  if (event.type === 'validation_error') {
+    logToMonitoring({
+      level: 'error',
+      code: event.code,
+      message: event.message
+    });
+  }
+});
+
+automator.on('warning', (event) => {
+  console.warn('Data coercion:', event.message);
+});
+```
+
+### Migration from v5.x
+
+**Before (v5.x - throwing exceptions):**
+```js
+try {
+  const id = automator.addTask({ cmd: 'test' });
+  console.log('Task added:', id);
+} catch (error) {
+  console.error('Failed:', error.message);
+}
+```
+
+**After (v6.0 - result objects):**
+```js
+const result = automator.addTask({ cmd: 'test' });
+
+if (result.success) {
+  console.log('Task added:', result.id);
+} else {
+  console.error('Failed:', result.error);
+}
+```
+
+---
+
+### Storage Options
+
+#### File-Based Persistence
+
+```js
+const automator = new Automator({
+  storageFile: './tasks.json',
+  autoSave: true,        // default: true
+  saveInterval: 15000    // default: 15000ms (15 seconds)
+});
+```
+
+**Moratorium-Based Persistence:**
+- **CRUD operations** (add/update/remove tasks) save immediately and start a moratorium period
+- **Task execution** (state progression) marks state as dirty and saves if moratorium has expired
+- If moratorium is active, dirty state waits until moratorium ends, then saves automatically
+- `saveInterval` sets the moratorium period - the minimum cooling time between saves (default: 15s)
+- `stop()` always saves immediately if dirty, ignoring any active moratorium
+
+This moratorium-based approach minimizes disk writes from frequent task execution (important for SD cards/flash media) while ensuring CRUD changes are always persisted immediately.
+
+#### Memory-Only Mode
+
+```js
+const automator = new Automator({
+  // No storageFile = memory-only mode (no persistence)
+});
+```
+
+State exists only in memory and is lost when the process ends.
+
+#### Custom Storage (Database, Cloud, etc.)
+
+For custom persistence needs, use `getTasks()` and event listeners:
+
+```js
+const automator = new Automator(); // Memory-only, no file
+
+// Load from custom source on initialization
+automator.seed(async (auto) => {
+  const tasks = await loadFromDatabase();
+  tasks.forEach(task => auto.addTask(task));
+});
+
+// Save on updates
+automator.on('update', async () => {
+  const tasks = automator.getTasks();
+  await saveToDatabase(tasks);
 });
 ```
 
 ---
 
-## 📊 Example: Sensor Reading Every Second
+## Example: Sensor Reading Every Second
 
 ```js
-automator.addAction({
+automator.addTask({
   name: 'TempSensor',
   cmd: 'readTemp',
   date: null,            // run immediately
   payload: null,
-  unBuffered: false,     // catch up if delayed
+  catchUpMode: 'default',
   repeat: {
     type: 'second',
     interval: 1
@@ -414,7 +702,7 @@ Your "60 readings per minute" pattern is preserved logically.
 
 ---
 
-## 🕰 DST Behavior Examples
+## DST Behavior Examples
 
 ### Fall Back (Repeated Hour)
 
@@ -439,7 +727,7 @@ User chooses:
 
 ---
 
-## 🧪 Testing
+## Testing
 
 ```bash
 npm test
@@ -448,9 +736,9 @@ npm run test:coverage
 
 ---
 
-## 📦 Action Specification
+## Task Specification
 
-### Top-level action fields:
+### Top-level task fields:
 
 | Field           | Description                                                           |
 | --------------- | --------------------------------------------------------------------- |
@@ -459,7 +747,10 @@ npm run test:coverage
 | `cmd`           | Name of registered function to execute                               |
 | `payload`       | Data passed to the command                                           |
 | `date`          | Next scheduled run time (local `Date`)                               |
-| `catchUpWindow` | Time window for catching up missed executions (smart default based on action type, or milliseconds number) |
+| `catchUpMode`   | Sets catch-up behavior ('default', 'realtime'). Overridden by explicit `catchUpWindow`. |
+| `catchUpWindow` | Time window for catching up missed executions (in milliseconds).      |
+| `catchUpLimit`  | Max number of missed executions to run (e.g., 1, or 'all').           |
+
 
 ### Repeat block:
 
@@ -474,7 +765,7 @@ npm run test:coverage
 
 ---
 
-## 🎯 Project Goals (v4)
+## Project Goals (v6)
 
 * Deterministic behavior
 * Rock-solid DST handling
@@ -484,17 +775,19 @@ npm run test:coverage
 * Suitable for small devices
 * Approachable but powerful API
 * Long-term maintainability
+* Never crash applications (result-based error handling)
+* Web interface friendly (synchronous, structured error feedback)
 
 ---
 
-## 📝 License
+## License
 
 MIT
 
 ---
 
-## ❤️ Acknowledgments
+## Acknowledgments
 
-jw-automator v4 is a ground-up rethinking of the original jw-automator library, preserving the spirit while strengthening the foundations.
+jw-automator v6 builds on the solid foundations of previous versions, adding result-based error handling to ensure stability and web interface compatibility while preserving the spirit of predictable, human-friendly scheduling.
 
 If you're building automation logic and want predictable, human-friendly scheduling that survives the real world — **welcome.**

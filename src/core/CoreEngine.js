@@ -11,7 +11,7 @@ class CoreEngine {
   /**
    * Process one scheduling step
    *
-   * @param {Object} state - Current scheduler state (actions array)
+   * @param {Object} state - Current scheduler state (tasks array)
    * @param {Date} lastTick - Previous tick time
    * @param {Date} now - Current tick time
    * @param {number} maxIterations - Safety limit for catch-up loops
@@ -21,29 +21,29 @@ class CoreEngine {
     const events = [];
     const newState = this._cloneState(state);
 
-    // Process each action
-    for (let i = 0; i < newState.actions.length; i++) {
-      const action = newState.actions[i];
+    // Process each task
+    for (let i = 0; i < newState.tasks.length; i++) {
+      const task = newState.tasks[i];
 
-      if (!action.date) {
+      if (!task.date) {
         // No scheduled time - run immediately
-        const event = this._executeAction(action, now);
+        const event = this._executeTask(task, now);
         events.push(event);
 
         // Advance to next occurrence
-        this._advanceAction(action);
+        this._advanceTask(task);
 
-        // Check if action should be removed
-        if (RecurrenceEngine.shouldStop(action)) {
-          newState.actions.splice(i, 1);
+        // Check if task should be removed
+        if (RecurrenceEngine.shouldStop(task)) {
+          newState.tasks.splice(i, 1);
           i--;
         }
         continue;
       }
 
-      const nextRun = new Date(action.date);
+      const nextRun = new Date(task.date);
 
-      // Safety: prevent processing actions in the future
+      // Safety: prevent processing tasks in the future
       if (nextRun > now) {
         continue;
       }
@@ -52,78 +52,81 @@ class CoreEngine {
       let iterationCount = 0;
       let currentNextRun = nextRun;
 
-      // Get catchUpWindow (defaults to "unlimited" for backwards compatibility)
-      const catchUpWindow = action.catchUpWindow !== undefined ? action.catchUpWindow : "unlimited";
+      // Get catchUpWindow and catchUpLimit (defaults to 0 - real-time mode, no catch-up)
+      const catchUpWindow = task.catchUpWindow !== undefined ? task.catchUpWindow : 0;
+      const catchUpLimit = task.catchUpLimit !== undefined ? task.catchUpLimit : 0;
 
-      // Fast-forward optimization: if we're far outside the catch-up window,
-      // jump directly to near the current time using mathematical projection
-      if (catchUpWindow !== "unlimited" && action.repeat) {
-        const lag = now.getTime() - currentNextRun.getTime();
-
-        if (lag > catchUpWindow * 2) {
-          // We're deep in the "Dead Zone" - use fast-forward
-          const fastForwardResult = this._fastForwardAction(action, now, catchUpWindow);
-
-          if (fastForwardResult) {
-            currentNextRun = fastForwardResult.nextRun;
-            action.date = currentNextRun;
-            action.count = fastForwardResult.count;
-
-            // After fast-forward, if still outside window, just advance without executing
-            if (currentNextRun <= now) {
-              const finalLag = now.getTime() - currentNextRun.getTime();
-              if (finalLag > catchUpWindow) {
-                // Still outside window after fast-forward, skip to next viable occurrence
-                this._advanceAction(action);
-                currentNextRun = action.date ? new Date(action.date) : null;
-              }
-            }
+      // JUMP: Fast-forward to the beginning of the catch-up window.
+      // This avoids iterating through a large number of occurrences outside the window.
+      if (catchUpWindow !== "unlimited" && catchUpWindow > 0 && task.repeat) {
+        const windowStart = new Date(now.getTime() - catchUpWindow);
+        if (currentNextRun < windowStart) {
+          const ffResult = RecurrenceEngine.fastForward(currentNextRun, task.repeat, windowStart);
+          if (ffResult && ffResult.skippedOccurrences > 0) {
+            task.date = ffResult.nextRun;
+            task.count = (task.count || 0) + ffResult.skippedOccurrences;
+            currentNextRun = ffResult.nextRun;
           }
         }
       }
 
-      while (currentNextRun <= now && iterationCount < maxIterations) {
+      // Buffer for collecting eligible slots when catchUpLimit is set
+      // This allows us to keep only the most recent N slots
+      const eligibleBuffer = [];
+      const needsBuffering = catchUpLimit !== "all" && catchUpLimit > 0;
+
+      while (currentNextRun && currentNextRun <= now && iterationCount < maxIterations) {
         iterationCount++;
 
         const lag = now.getTime() - currentNextRun.getTime();
 
-        // Determine if we should execute this occurrence based on catchUpWindow
-        const isInCurrentTick = currentNextRun > lastTick && currentNextRun <= now;
+        // Determine if this occurrence is eligible based on catchUpWindow
         const isWithinWindow = catchUpWindow === "unlimited" || lag <= catchUpWindow;
 
-        // Legacy unBuffered behavior (maps to catchUpWindow: 0 or Infinity)
-        const shouldExecute = isWithinWindow;
-
-        if (shouldExecute) {
-          const event = this._executeAction(action, currentNextRun);
-          events.push(event);
+        if (isWithinWindow) {
+          if (needsBuffering) {
+            // Buffer this eligible slot
+            eligibleBuffer.push({
+              scheduledTime: new Date(currentNextRun),
+              count: task.count || 0
+            });
+            // Keep only the last N slots
+            if (eligibleBuffer.length > catchUpLimit) {
+              eligibleBuffer.shift();
+            }
+          } else if (catchUpLimit === "all") {
+            // Execute immediately - no limit
+            const event = this._executeTask(task, currentNextRun);
+            events.push(event);
+          }
+          // If catchUpLimit is 0, don't execute (real-time mode)
         }
 
         // Advance to next occurrence
         const prevTime = currentNextRun.getTime();
-        this._advanceAction(action);
+        this._advanceTask(task);
 
-        // Check if action should stop
-        if (RecurrenceEngine.shouldStop(action)) {
-          newState.actions.splice(i, 1);
+        // Check if task should stop
+        if (RecurrenceEngine.shouldStop(task)) {
+          newState.tasks.splice(i, 1);
           i--;
           break;
         }
 
         // Update currentNextRun for next iteration
-        if (action.date) {
-          currentNextRun = new Date(action.date);
+        if (task.date) {
+          currentNextRun = new Date(task.date);
 
           // SAFETY: Ensure monotonic progression
           if (currentNextRun.getTime() <= prevTime) {
             events.push({
               type: 'error',
-              message: `Action ${action.id} failed to advance time monotonically`,
-              actionId: action.id
+              message: `Task ${task.id} failed to advance time monotonically`,
+              taskId: task.id
             });
             // Force advancement
             currentNextRun = new Date(prevTime + 1000);
-            action.date = currentNextRun;
+            task.date = currentNextRun;
           }
         } else {
           // No more occurrences
@@ -131,12 +134,29 @@ class CoreEngine {
         }
       }
 
+      // Execute buffered slots (if we were buffering)
+      if (needsBuffering && eligibleBuffer.length > 0) {
+        for (const slot of eligibleBuffer) {
+          const event = {
+            type: 'task',
+            taskId: task.id,
+            name: task.name,
+            cmd: task.cmd,
+            payload: task.payload,
+            scheduledTime: slot.scheduledTime,
+            actualTime: new Date(),
+            count: slot.count
+          };
+          events.push(event);
+        }
+      }
+
       // Safety check: iteration limit reached
       if (iterationCount >= maxIterations) {
         events.push({
           type: 'error',
-          message: `Action ${action.id} exceeded max iterations (${maxIterations}) - possible infinite loop`,
-          actionId: action.id
+          message: `Task ${task.id} exceeded max iterations (${maxIterations}) - possible infinite loop`,
+          taskId: task.id
         });
       }
     }
@@ -149,137 +169,61 @@ class CoreEngine {
    */
   static _cloneState(state) {
     return {
-      actions: state.actions.map(action => ({ ...action }))
+      tasks: state.tasks.map(task => ({ ...task }))
     };
   }
 
   /**
-   * Check if a time falls within the current tick window
+   * Create a task execution event
    */
-  static _isCurrentTick(time, lastTick, now) {
-    return time > lastTick && time <= now;
-  }
-
-  /**
-   * Create an action execution event
-   */
-  static _executeAction(action, scheduledTime) {
+  static _executeTask(task, scheduledTime) {
     return {
-      type: 'action',
-      actionId: action.id,
-      name: action.name,
-      cmd: action.cmd,
-      payload: action.payload,
+      type: 'task',
+      taskId: task.id,
+      name: task.name,
+      cmd: task.cmd,
+      payload: task.payload,
       scheduledTime: new Date(scheduledTime),
       actualTime: new Date(),
-      count: action.count || 0
+      count: task.count || 0
     };
   }
 
   /**
-   * Advance an action to its next occurrence
+   * Advance a task to its next occurrence
    */
-  static _advanceAction(action) {
+  static _advanceTask(task) {
     // Increment count
-    action.count = (action.count || 0) + 1;
+    task.count = (task.count || 0) + 1;
 
     // Calculate next run time
-    if (action.repeat) {
-      const currentTime = action.date ? new Date(action.date) : new Date();
-      const dstPolicy = action.repeat.dstPolicy || 'once';
+    if (task.repeat) {
+      const currentTime = task.date ? new Date(task.date) : new Date();
+      const dstPolicy = task.repeat.dstPolicy || 'once';
 
       const nextTime = RecurrenceEngine.getNextOccurrence(
         currentTime,
-        action.repeat,
+        task.repeat,
         dstPolicy
       );
 
-      action.date = nextTime;
+      task.date = nextTime;
     } else {
-      // One-time action - clear date
-      action.date = null;
+      // One-time task - clear date
+      task.date = null;
     }
   }
 
-  /**
-   * Fast-forward an action to near the current time using mathematical projection
-   * This avoids iterating through thousands/millions of occurrences for high-frequency tasks
-   *
-   * @param {Object} action - The action to fast-forward
-   * @param {Date} now - Current time
-   * @param {number} catchUpWindow - The catch-up window in milliseconds
-   * @returns {Object|null} - { nextRun, count } or null if not applicable
-   */
-  static _fastForwardAction(action, now, catchUpWindow) {
-    if (!action.repeat || !action.date) {
-      return null;
-    }
 
-    const { type, interval = 1 } = action.repeat;
-    const currentTime = new Date(action.date);
-    const lag = now.getTime() - currentTime.getTime();
-
-    // Only applicable for simple time-based recurrence (not weekday/weekend)
-    let stepMilliseconds = 0;
-
-    switch (type) {
-      case 'second':
-        stepMilliseconds = interval * 1000;
-        break;
-      case 'minute':
-        stepMilliseconds = interval * 60 * 1000;
-        break;
-      case 'hour':
-        stepMilliseconds = interval * 60 * 60 * 1000;
-        break;
-      case 'day':
-        stepMilliseconds = interval * 24 * 60 * 60 * 1000;
-        break;
-      case 'week':
-        stepMilliseconds = interval * 7 * 24 * 60 * 60 * 1000;
-        break;
-      default:
-        // Complex recurrence (weekday, weekend, month, year) - can't fast-forward easily
-        return null;
-    }
-
-    if (stepMilliseconds === 0) {
-      return null;
-    }
-
-    // Calculate how many steps we can skip
-    // We want to jump to just before the catch-up window starts
-    const targetLag = catchUpWindow;
-    const timeToSkip = lag - targetLag;
-
-    if (timeToSkip <= 0) {
-      return null;
-    }
-
-    const stepsToSkip = Math.floor(timeToSkip / stepMilliseconds);
-
-    if (stepsToSkip <= 0) {
-      return null;
-    }
-
-    // Project forward
-    const newTime = new Date(currentTime.getTime() + (stepsToSkip * stepMilliseconds));
-    const newCount = (action.count || 0) + stepsToSkip;
-
-    return {
-      nextRun: newTime,
-      count: newCount
-    };
-  }
 
   /**
-   * Simulate actions in a time range without mutating state
+   * Simulate tasks in a time range without mutating state
    */
   static simulate(state, startDate, endDate, maxIterations = 100000) {
     const simulatedEvents = [];
     const simulatedState = this._cloneState(state);
 
-    // Start simulation from the earliest action time or startDate
+    // Start simulation from the earliest task time or startDate
     let currentTime = new Date(startDate);
 
     // Align to second boundary
@@ -296,11 +240,11 @@ class CoreEngine {
       iterationCount++;
 
       const { newState, events } = this.step(simulatedState, lastTick, currentTime, maxIterations);
-      simulatedState.actions = newState.actions;
+      simulatedState.tasks = newState.tasks;
 
-      // Collect action events (filter out errors for cleaner simulation output)
-      const actionEvents = events.filter(e => e.type === 'action');
-      simulatedEvents.push(...actionEvents);
+      // Collect task events (filter out errors for cleaner simulation output)
+      const taskEvents = events.filter(e => e.type === 'task');
+      simulatedEvents.push(...taskEvents);
 
       // Advance time by 1 second
       lastTick = currentTime;

@@ -21,7 +21,7 @@ const Automator = require('jw-automator');
 
 // Create automator with file-based storage
 const automator = new Automator({
-  storage: Automator.storage.file('./my-actions.json')
+  storage: Automator.storage.file('./my-tasks.json')
 });
 
 // Register a function
@@ -29,8 +29,8 @@ automator.addFunction('sayHello', function(payload) {
   console.log(`Hello, ${payload.name}!`);
 });
 
-// Add a repeating action
-automator.addAction({
+// Add a repeating task
+automator.addTask({
   name: 'Greeting',
   cmd: 'sayHello',
   date: new Date(Date.now() + 2000), // Start in 2 seconds
@@ -43,8 +43,8 @@ automator.addAction({
 });
 
 // Listen to events
-automator.on('action', (event) => {
-  console.log(`Action executed: ${event.name}`);
+automator.on('task', (event) => {
+  console.log(`Task executed: ${event.name}`);
 });
 
 // Start the scheduler
@@ -66,7 +66,7 @@ node app.js
 ### Daily Task at Specific Time
 
 ```javascript
-automator.addAction({
+automator.addTask({
   name: 'Daily Backup',
   cmd: 'runBackup',
   date: new Date('2025-05-01T02:00:00'), // 2:00 AM
@@ -80,7 +80,7 @@ automator.addAction({
 ### Weekday Task
 
 ```javascript
-automator.addAction({
+automator.addTask({
   name: 'Weekday Reminder',
   cmd: 'sendReminder',
   date: new Date('2025-05-01T09:00:00'), // 9:00 AM
@@ -94,7 +94,7 @@ automator.addAction({
 ### Every N Minutes
 
 ```javascript
-automator.addAction({
+automator.addTask({
   name: 'Health Check',
   cmd: 'checkHealth',
   date: new Date(),
@@ -108,7 +108,7 @@ automator.addAction({
 ### Limited Run Count
 
 ```javascript
-automator.addAction({
+automator.addTask({
   name: 'Startup Sequence',
   cmd: 'initSystem',
   date: new Date(),
@@ -123,7 +123,7 @@ automator.addAction({
 ### End Date
 
 ```javascript
-automator.addAction({
+automator.addTask({
   name: 'Summer Sprinklers',
   cmd: 'waterLawn',
   date: new Date('2025-06-01T06:00:00'),
@@ -143,8 +143,8 @@ Automator v4 manages offline catch-up using the `catchUpWindow` property, which 
 
 ### Smart Defaults for `catchUpWindow`
 
--   **Recurring Actions:** If `catchUpWindow` is not specified, it defaults to the **duration of the action's recurrence interval**. This ensures short delays are recovered, but long outages don't cause a "thundering herd."
--   **One-Time Actions:** If `catchUpWindow` is not specified and the action has no `repeat` property, it defaults to **`0`** (skip if missed).
+-   **Recurring Tasks:** If `catchUpWindow` is not specified, it defaults to the **duration of the task's recurrence interval**. This ensures short delays are recovered, but long outages don't cause a "thundering herd."
+-   **One-Time Tasks:** If `catchUpWindow` is not specified and the task has no `repeat` property, it defaults to **`0`** (skip if missed).
 
 ### Explicit Control
 
@@ -157,7 +157,7 @@ You can explicitly set `catchUpWindow`:
 #### Example: Critical Task (unlimited catch-up)
 
 ```javascript
-automator.addAction({
+automator.addTask({
   name: 'Critical Task',
   cmd: 'criticalTask',
   date: new Date('2025-05-01T10:00:00'),
@@ -171,7 +171,7 @@ If the system is offline from 10:00 to 13:00, it will execute the 10:00, 11:00, 
 #### Example: Animation Frame (skip missed)
 
 ```javascript
-automator.addAction({
+automator.addTask({
   name: 'Animation Frame',
   cmd: 'updateAnimation',
   date: new Date(),
@@ -194,7 +194,7 @@ Preview what will happen in the future:
 const tomorrow = new Date();
 tomorrow.setDate(tomorrow.getDate() + 1);
 
-const events = automator.getActionsInRange(new Date(), tomorrow);
+const events = automator.getTasksInRange(new Date(), tomorrow);
 
 console.log(`${events.length} events scheduled in next 24 hours`);
 
@@ -207,35 +207,50 @@ events.slice(0, 5).forEach(event => {
 
 ## Storage Options
 
-### File Storage
+### File-Based Persistence
 
 ```javascript
 const automator = new Automator({
-  storage: Automator.storage.file('./actions.json')
+  storageFile: './tasks.json',
+  autoSave: true,        // default: true
+  saveInterval: 15000    // default: 15000ms (15 seconds)
 });
 ```
 
-### Memory Storage (No Persistence)
+**Moratorium-Based Persistence:**
+- CRUD operations (add/update/remove) save immediately and start a moratorium period
+- Task execution marks state as dirty and saves if moratorium has expired
+- `saveInterval` sets the moratorium period (minimum cooling time between saves)
+- Reduces disk wear from task execution while ensuring CRUD changes persist immediately
+- `stop()` always saves immediately if dirty, ignoring any active moratorium
+
+### Memory-Only Mode (No Persistence)
 
 ```javascript
 const automator = new Automator({
-  storage: Automator.storage.memory()
+  // No storageFile = memory-only mode
 });
 ```
 
-### Custom Storage
+State is lost when the process ends.
+
+### Custom Storage (Database, Cloud, etc.)
+
+For custom persistence, use `getTasks()` and event listeners:
 
 ```javascript
-const automator = new Automator({
-  storage: {
-    load: function() {
-      // Load from database, cloud, etc.
-      return { actions: [...] };
-    },
-    save: function(state) {
-      // Save to database, cloud, etc.
-    }
-  }
+const automator = new Automator(); // Memory-only
+
+// Load from custom source
+automator.seed(async (auto) => {
+  const tasks = await loadFromDatabase();
+  tasks.forEach(task => auto.addTask(task));
+});
+
+// Save on updates
+automator.on('update', async () => {
+  const tasks = automator.getTasks();
+  await saveToDatabase(tasks);
 });
 ```
 
@@ -249,17 +264,17 @@ automator.on('ready', () => {
   console.log('Scheduler started');
 });
 
-// Action executed
-automator.on('action', (event) => {
-  console.log('Action:', event.name);
+// Task executed
+automator.on('task', (event) => {
+  console.log('Task:', event.name);
   console.log('Scheduled:', event.scheduledTime);
   console.log('Actual:', event.actualTime);
   console.log('Count:', event.count);
 });
 
-// Action added/updated/removed
+// Task added/updated/removed
 automator.on('update', (event) => {
-  console.log('Update:', event.operation, event.actionId);
+  console.log('Update:', event.operation, event.taskId);
 });
 
 // Errors
@@ -275,12 +290,12 @@ automator.on('warning', (event) => {
 
 ---
 
-## Managing Actions
+## Managing Tasks
 
 ### Add
 
 ```javascript
-const id = automator.addAction({
+const id = automator.addTask({
   name: 'My Task',
   cmd: 'myCommand',
   date: new Date(),
@@ -292,13 +307,13 @@ const id = automator.addAction({
 
 ```javascript
 // By ID
-automator.updateActionByID(id, {
+automator.updateTaskByID(id, {
   name: 'Updated Task',
   repeat: { type: 'hour', interval: 2 }
 });
 
 // By name
-automator.updateActionByName('My Task', {
+automator.updateTaskByName('My Task', {
   payload: { updated: true }
 });
 ```
@@ -307,26 +322,26 @@ automator.updateActionByName('My Task', {
 
 ```javascript
 // By ID
-automator.removeActionByID(id);
+automator.removeTaskByID(id);
 
 // By name
-automator.removeActionByName('My Task');
+automator.removeTaskByName('My Task');
 ```
 
 ### Query
 
 ```javascript
-// All actions
-const all = automator.getActions();
+// All tasks
+const all = automator.getTasks();
 
 // By name
-const tasks = automator.getActionsByName('My Task');
+const tasks = automator.getTasksByName('My Task');
 
 // By ID
-const task = automator.getActionByID(id);
+const task = automator.getTaskByID(id);
 
 // Description
-const desc = automator.describeAction(id);
+const desc = automator.describeTask(id);
 console.log(desc);
 ```
 
@@ -334,12 +349,12 @@ console.log(desc);
 
 ## DST Handling
 
-For actions that run during daylight saving time transitions:
+For tasks that run during daylight saving time transitions:
 
 ### Fall Back (Repeated Hour)
 
 ```javascript
-automator.addAction({
+automator.addTask({
   name: 'DST Aware',
   cmd: 'task',
   date: new Date('2025-11-02T01:30:00'), // Falls in repeated hour

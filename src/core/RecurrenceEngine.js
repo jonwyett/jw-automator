@@ -7,7 +7,7 @@
 
 class RecurrenceEngine {
   /**
-   * Calculate the next occurrence time for an action based on its recurrence rule.
+   * Calculate the next occurrence time for a task based on its recurrence rule.
    *
    * CRITICAL INVARIANT: nextTime.getTime() > currentTime.getTime()
    *
@@ -67,6 +67,67 @@ class RecurrenceEngine {
     next = this._handleDSTTransition(current, next, dstPolicy);
 
     return next;
+  }
+
+  /**
+   * Fast-forward a task to a target time using mathematical projection.
+   * This is only applicable for simple, fixed-duration recurrence types.
+   *
+   * @param {Date} currentTime - The current scheduled time.
+   * @param {Object} repeat - The repeat configuration.
+   * @param {Date} targetTime - The time to project towards.
+   * @returns {Object|null} - { nextRun, skippedOccurrences } or null if not applicable.
+   */
+  static fastForward(currentTime, repeat, targetTime) {
+    if (!repeat || !repeat.type) {
+      return null;
+    }
+
+    const { type, interval = 1 } = repeat;
+    const timeToSkip = targetTime.getTime() - currentTime.getTime();
+
+    if (timeToSkip <= 0) {
+      return { nextRun: currentTime, skippedOccurrences: 0 };
+    }
+
+    let stepMilliseconds = 0;
+    switch (type) {
+      case 'second':
+        stepMilliseconds = interval * 1000;
+        break;
+      case 'minute':
+        stepMilliseconds = interval * 60 * 1000;
+        break;
+      case 'hour':
+        stepMilliseconds = interval * 60 * 60 * 1000;
+        break;
+      case 'day':
+        stepMilliseconds = interval * 24 * 60 * 60 * 1000;
+        break;
+      case 'week':
+        stepMilliseconds = interval * 7 * 24 * 60 * 60 * 1000;
+        break;
+      default:
+        // Complex recurrence types (weekday, weekend, month, year) cannot be fast-forwarded.
+        return null;
+    }
+
+    if (stepMilliseconds === 0) {
+      return null;
+    }
+
+    const stepsToSkip = Math.floor(timeToSkip / stepMilliseconds);
+
+    if (stepsToSkip <= 0) {
+      return { nextRun: currentTime, skippedOccurrences: 0 };
+    }
+
+    const newTime = new Date(currentTime.getTime() + (stepsToSkip * stepMilliseconds));
+
+    return {
+      nextRun: newTime,
+      skippedOccurrences: stepsToSkip,
+    };
   }
 
   /**
@@ -206,16 +267,16 @@ class RecurrenceEngine {
   }
 
   /**
-   * Check if an action should stop based on limit or endDate
+   * Check if a task should stop based on limit or endDate
    */
-  static shouldStop(action) {
-    const { repeat } = action;
+  static shouldStop(task) {
+    const { repeat } = task;
 
     if (!repeat) return true;
 
     // Check count limit
     if (repeat.limit !== null && repeat.limit !== undefined) {
-      const count = action.count || 0;
+      const count = task.count || 0;
       if (count >= repeat.limit) {
         return true;
       }
@@ -224,7 +285,7 @@ class RecurrenceEngine {
     // Check end date
     if (repeat.endDate) {
       const endDate = new Date(repeat.endDate);
-      const nextRun = new Date(action.date);
+      const nextRun = new Date(task.date);
       if (nextRun > endDate) {
         return true;
       }

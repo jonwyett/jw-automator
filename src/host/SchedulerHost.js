@@ -11,11 +11,12 @@ const CoreEngine = require('../core/CoreEngine');
 class SchedulerHost extends EventEmitter {
   constructor() {
     super();
-    this.state = { actions: [] };
+    this.state = { tasks: [] };
     this.running = false;
     this.lastTick = null;
     this.timer = null;
     this.functions = new Map();
+    this.bootMode = true;
   }
 
   /**
@@ -27,8 +28,48 @@ class SchedulerHost extends EventEmitter {
     }
 
     this.running = true;
-    this.lastTick = new Date();
-    this.lastTick.setMilliseconds(0);
+    const now = new Date();
+    now.setMilliseconds(0);
+
+    // Boot sweep - advance state to current time without executing tasks
+    if (this.bootMode) {
+      try {
+        // Boot sweep: advance state from lastTick to now without executing tasks
+        // If lastTick is null (first start), use now (no catch-up needed)
+        const { newState, events } = CoreEngine.step(this.state, this.lastTick || now, now);
+
+        // Update state (tasks are now advanced to current time)
+        this.state = newState;
+
+        // Process events to ensure state consistency, but don't execute callbacks
+        // The bootMode flag will prevent _executeTaskEvent from calling functions
+        for (const event of events) {
+          if (event.type === 'task') {
+            this._executeTaskEvent(event);
+          } else if (event.type === 'error') {
+            this.emit('error', event);
+          }
+        }
+
+        // Exit boot mode
+        this.bootMode = false;
+
+        // Signal to Automator that state should be saved
+        this.emit('boot-complete');
+
+      } catch (error) {
+        this.emit('error', {
+          type: 'error',
+          message: `Boot sweep error: ${error.message}`,
+          error
+        });
+        // Exit boot mode even on error to allow normal operation
+        this.bootMode = false;
+      }
+    }
+
+    // Set lastTick after boot sweep completes
+    this.lastTick = now;
 
     this._scheduleTick();
     this.emit('ready');
@@ -102,8 +143,8 @@ class SchedulerHost extends EventEmitter {
 
       // Process events
       for (const event of events) {
-        if (event.type === 'action') {
-          this._executeActionEvent(event);
+        if (event.type === 'task') {
+          this._executeTaskEvent(event);
         } else if (event.type === 'error') {
           this.emit('error', event);
         }
@@ -121,11 +162,16 @@ class SchedulerHost extends EventEmitter {
   }
 
   /**
-   * Execute an action event by calling its registered function
+   * Execute a task event by calling its registered function
    */
-  _executeActionEvent(event) {
-    // Emit the action event
-    this.emit('action', event);
+  _executeTaskEvent(event) {
+    // Skip execution during boot mode
+    if (this.bootMode) {
+      return;
+    }
+
+    // Emit the task event
+    this.emit('task', event);
 
     // Execute the command function if registered
     const fn = this.functions.get(event.cmd);
@@ -136,7 +182,7 @@ class SchedulerHost extends EventEmitter {
         this.emit('error', {
           type: 'error',
           message: `Error executing command ${event.cmd}: ${error.message}`,
-          actionId: event.actionId,
+          taskId: event.taskId,
           error
         });
       }
@@ -144,16 +190,16 @@ class SchedulerHost extends EventEmitter {
       this.emit('debug', {
         type: 'debug',
         message: `No function registered for command: ${event.cmd}`,
-        actionId: event.actionId
+        taskId: event.taskId
       });
     }
   }
 
   /**
-   * Add an action to the state
+   * Add a task to the state
    */
-  addAction(action) {
-    this.state.actions.push(action);
+  addTask(task) {
+    this.state.tasks.push(task);
   }
 
   /**

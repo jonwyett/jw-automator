@@ -12,7 +12,7 @@ This document describes the internal architecture of jw-automator v3.
 2. **Local Time First**: Human-centric time semantics, not UTC-based
 3. **Deterministic Core**: Pure step function enables testing and simulation
 4. **Resilience**: Survive offline gaps, DST transitions, and event loop stalls
-5. **Separation of Concerns**: Spec vs. state, core vs. host, storage abstraction
+5. **Separation of Concerns**: Spec vs. state, core vs. host, persistence strategy
 
 ---
 
@@ -23,38 +23,38 @@ This document describes the internal architecture of jw-automator v3.
 │           Automator (API)               │
 │  - User-facing API                      │
 │  - Event management                     │
-│  - Action CRUD operations               │
-│  - Persistence coordination             │
+│  - Task CRUD operations                 │
+│  - Moratorium-based persistence         │
 └──────────────┬──────────────────────────┘
                │
-        ┌──────┴──────┐
+               │
+               │
+        ┌──────▼──────┐
+        │SchedulerHost│
         │             │
-┌───────▼──────┐  ┌──▼──────────────┐
-│ SchedulerHost│  │ Storage Adapter │
-│              │  │                 │
-│ - 1-sec tick │  │ - load()        │
-│ - Event emit │  │ - save()        │
-│ - Functions  │  └─────────────────┘
-└───────┬──────┘
-        │
-┌───────▼──────────────────────────┐
-│         CoreEngine               │
-│                                  │
-│  step(state, lastTick, now)      │
-│    → { newState, events }        │
-│                                  │
-│  - Deterministic                 │
-│  - Pure function                 │
-│  - Testable                      │
-└──────────┬───────────────────────┘
-           │
-    ┌──────▼────────┐
-    │RecurrenceEngine│
-    │                │
-    │ - Next occurrence calc │
-    │ - DST handling         │
-    │ - Local-time logic     │
-    └────────────────┘
+        │ - 1-sec tick│
+        │ - Event emit│
+        │ - Functions │
+        └──────┬──────┘
+               │
+┌──────────────▼──────────────────────┐
+│         CoreEngine                  │
+│                                     │
+│  step(state, lastTick, now)         │
+│    → { newState, events }           │
+│                                     │
+│  - Deterministic                    │
+│  - Pure function                    │
+│  - Testable                         │
+└──────────────┬──────────────────────┘
+               │
+        ┌──────▼────────┐
+        │RecurrenceEngine│
+        │                │
+        │ - Next occurrence calc │
+        │ - DST handling         │
+        │ - Local-time logic     │
+        └────────────────┘
 ```
 
 ---
@@ -68,7 +68,7 @@ This document describes the internal architecture of jw-automator v3.
 **Responsibilities**:
 - Process scheduling steps
 - Manage catch-up logic
-- Emit action events
+- Emit task events
 - Enforce safety invariants (max iterations, monotonic time)
 
 **Key Method**: `step(state, lastTick, now)`
@@ -119,28 +119,36 @@ setTimeout(() => tick(), wait);
 
 **Why?**
 - Prevents cumulative drift
-- Ensures all actions check against stable boundaries
+- Ensures all tasks check against stable boundaries
 - Enables deterministic simulation
 
 ---
 
-### 4. Storage Adapters
+### 4. Persistence (v5+)
 
-**Purpose**: Pluggable persistence
+**Purpose**: State persistence with minimal disk wear
 
-**Interface**:
-```javascript
-{
-  load: () => state,
-  save: (state) => void
-}
-```
+**Implementation**: Integrated directly into Automator class
 
-**Built-in Adapters**:
-- `FileStorage`: JSON file persistence
-- `MemoryStorage`: In-memory (no persistence)
+**Strategy**: Moratorium-based state machine
+- CRUD operations (add/update/remove) save immediately and start moratorium period
+- Task execution marks state dirty and saves if moratorium has expired
+- If moratorium is active, dirty state waits until moratorium ends, then saves automatically
+- Single entry point: `_requestSave(force)` with "tell vs ask" semantics
+- `saveInterval` defines the moratorium period (minimum cooling time, default: 15 seconds)
+- `stop()` forces save if dirty, ignoring any active moratorium
+- No periodic polling - one-shot timer only fires when state is dirty
 
-**Custom Adapters**: Users can provide their own (database, cloud, etc.)
+**State Machine**:
+- `stateDirty`: Boolean flag indicating unsaved changes
+- `moratoriumActive`: Boolean flag indicating cooling period is active
+- `moratoriumTimer`: One-shot setTimeout handle (not setInterval)
+
+**Files**:
+- File-based: `storageFile` option specifies JSON file path
+- Memory-only: No `storageFile` option
+
+**Custom Persistence**: Use `getTasks()` and event listeners for database/cloud storage
 
 ---
 
@@ -151,28 +159,28 @@ setTimeout(() => tick(), wait);
 **Responsibilities**:
 - Coordinate all components
 - Provide user-facing API
-- Manage action lifecycle
+- Manage task lifecycle
 - Handle auto-save
 - Event emission
 
 **Key APIs**:
-- Action management: `addAction`, `updateActionByID`, `updateActionByName`, `removeActionByID`, etc.
+- Task management: `addTask`, `updateTaskByID`, `updateTaskByName`, `removeTaskByID`, etc.
 - Function registration: `addFunction`, `removeFunction`
-- Introspection: `getActions`, `describeAction`, `getActionsInRange`
+- Introspection: `getTasks`, `describeTask`, `getTasksInRange`
 - Lifecycle: `start`, `stop`
 
 ---
 
 ## Data Flow
 
-### Adding an Action
+### Adding a Task
 
 ```
-User calls addAction()
+User calls addTask()
     ↓
 Automator validates spec
     ↓
-Creates action with ID and state
+Creates task with ID and state
     ↓
 Adds to SchedulerHost state
     ↓
@@ -188,7 +196,7 @@ SchedulerHost timer fires
     ↓
 Calls CoreEngine.step(state, lastTick, now)
     ↓
-CoreEngine processes each action:
+CoreEngine processes each task:
   - Is nextRun <= now?
   - Buffered/unbuffered logic
   - Execute or skip
@@ -199,9 +207,9 @@ Returns { newState, events }
     ↓
 SchedulerHost updates state
     ↓
-SchedulerHost executes action events:
+SchedulerHost executes task events:
   - Call registered function
-  - Emit 'action' event
+  - Emit 'task' event
     ↓
 Schedule next tick
 ```
@@ -209,13 +217,13 @@ Schedule next tick
 ### Simulation
 
 ```
-User calls getActionsInRange(start, end)
+User calls getTasksInRange(start, end)
     ↓
 CoreEngine.simulate() clones state
     ↓
 Steps through time second-by-second
     ↓
-Collects all action events
+Collects all task events
     ↓
 Returns event list (state unchanged)
 ```
@@ -246,9 +254,9 @@ Returns event list (state unchanged)
 
 ### Why `catchUpWindow` (and Legacy Buffered/UnBuffered)?
 
-The `catchUpWindow` property, supported by the CoreEngine, precisely defines the time window for recovering missed actions.
+The `catchUpWindow` property, supported by the CoreEngine, precisely defines the time window for recovering missed tasks.
 
-- **Smart Defaults**: For recurring actions, the `catchUpWindow` defaults to the action's interval (e.g., a 1-hour action has a 1-hour catch-up window). For one-time actions, it defaults to `0` (no catch-up). This prevents "thundering herd" issues by ensuring that actions too old are simply skipped.
+- **Smart Defaults**: For recurring tasks, the `catchUpWindow` defaults to the task's interval (e.g., a 1-hour task has a 1-hour catch-up window). For one-time tasks, it defaults to `0` (no catch-up). This prevents "thundering herd" issues by ensuring that tasks too old are simply skipped.
 - **Explicit Control**: Users can still set `catchUpWindow` to `0` (skip all missed), a specific millisecond value (tolerate N ms lag), or `"unlimited"` (catch up all, like old buffered behavior).
 - **Legacy `unBuffered`**: The `unBuffered` flag (`true` or `false`) is now a legacy alias for `catchUpWindow: 0` and `catchUpWindow: "unlimited"` respectively. The system transparently maps it.
 
@@ -276,7 +284,7 @@ The `catchUpWindow` property, supported by the CoreEngine, precisely defines the
 
 ### 3. State Integrity
 
-- Actions cloned before mutation
+- Tasks cloned before mutation
 - Spec vs. state separation
 - Deep copies returned from getters
 - Auto-save with configurable intervals
@@ -285,25 +293,32 @@ The `catchUpWindow` property, supported by the CoreEngine, precisely defines the
 
 ## Performance Characteristics
 
-- **Per-Tick Complexity**: O(n) where n = number of actions
+- **Per-Tick Complexity**: O(n) where n = number of tasks
 - **Recurrence Calculation**: O(1) per step
-- **Memory**: O(n) for action storage
-- **Disk I/O**: Configurable auto-save interval (default 5s)
+- **Memory**: O(n) for task storage
+- **Disk I/O**: Dirty-flag with cooling period (default: 15s minimum between saves)
 
-**Scalability**: Designed for 10-1000 actions, not 100,000s
+**Scalability**: Designed for 10-1000 tasks, not 100,000s
 
 ---
 
 ## Extension Points
 
-### Custom Storage
+### Custom Persistence
+
+Use `getTasks()` and event listeners for database/cloud storage:
 
 ```javascript
-new Automator({
-  storage: {
-    load: () => loadFromDatabase(),
-    save: (state) => saveToDatabase(state)
-  }
+const automator = new Automator(); // Memory-only
+
+automator.seed(async (auto) => {
+  const tasks = await loadFromDatabase();
+  tasks.forEach(task => auto.addTask(task));
+});
+
+automator.on('update', async () => {
+  const tasks = automator.getTasks();
+  await saveToDatabase(tasks);
 });
 ```
 
@@ -311,9 +326,9 @@ new Automator({
 
 Extend `RecurrenceEngine` with new types (requires code modification)
 
-### Meta-Actions
+### Meta-Tasks
 
-Actions can call `automator.addAction()` to create dynamic schedules
+Tasks can call `automator.addTask()` to create dynamic schedules
 
 ---
 
@@ -335,9 +350,9 @@ Potential improvements for future versions:
 - Timezone support (explicit tz parameter)
 - Cron expression compatibility layer
 - Web-based dashboard
-- Action priorities
+- Task priorities
 - Conditional execution (predicates)
-- Action dependencies (chains)
+- Task dependencies (chains)
 
 ---
 

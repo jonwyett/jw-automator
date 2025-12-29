@@ -8,7 +8,7 @@ const Automator = require('../index');
 
 // Create automator with file-based persistence
 const automator = new Automator({
-  storage: Automator.storage.file('./example-actions.json'),
+  storageFile: './example-actions.json',
   autoSave: true,
   saveInterval: 5000
 });
@@ -36,7 +36,7 @@ automator.addFunction('weeklyBackup', function(payload) {
 // Listen to events
 automator.on('ready', () => {
   console.log('Automator started!');
-  console.log('Current actions:', automator.getActions().length);
+  console.log('Current actions:', automator.getTasks().length);
 });
 
 automator.on('action', (event) => {
@@ -51,11 +51,11 @@ automator.on('error', (event) => {
 });
 
 // Seed initial actions (runs only on first use)
-automator.seed((auto) => {
+const seedResult = automator.seed((auto) => {
   console.log('Seeding initial actions...\n');
 
   // 1. Every 10 seconds - demo message
-  auto.addAction({
+  const result1 = auto.addTask({
     name: 'Demo Message',
     cmd: 'logMessage',
     date: new Date(Date.now() + 5000), // Start in 5 seconds
@@ -68,9 +68,12 @@ automator.seed((auto) => {
       dstPolicy: 'once'
     }
   });
+  if (!result1.success) {
+    console.error('Failed to add demo task:', result1.error);
+  }
 
   // 2. Daily morning routine at 7:00 AM
-  auto.addAction({
+  const result2 = auto.addTask({
     name: 'Morning Routine',
     cmd: 'morningRoutine',
     date: new Date(new Date().setHours(7, 0, 0, 0)),
@@ -81,13 +84,16 @@ automator.seed((auto) => {
       dstPolicy: 'once'
     }
   });
+  if (!result2.success) {
+    console.error('Failed to add morning routine:', result2.error);
+  }
 
   // 3. Weekly backup every Sunday at 2:00 AM
   const nextSunday = new Date();
   nextSunday.setDate(nextSunday.getDate() + (7 - nextSunday.getDay()) % 7);
   nextSunday.setHours(2, 0, 0, 0);
 
-  auto.addAction({
+  const result3 = auto.addTask({
     name: 'Weekly Backup',
     cmd: 'weeklyBackup',
     date: nextSunday,
@@ -98,14 +104,23 @@ automator.seed((auto) => {
       dstPolicy: 'once'
     }
   });
+  if (!result3.success) {
+    console.error('Failed to add weekly backup:', result3.error);
+  }
 });
+
+if (seedResult.seeded) {
+  console.log('✅ Database seeded successfully\n');
+} else {
+  console.log('ℹ️  Database already populated - seeding skipped\n');
+}
 
 // Demonstrate simulation - what will happen in the next 24 hours?
 console.log('\n=== Simulation: Next 24 hours ===');
 const now = new Date();
 const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
 
-const futureEvents = automator.getActionsInRange(now, tomorrow);
+const futureEvents = automator.getTasksInRange(now, tomorrow);
 console.log(`${futureEvents.length} events scheduled in the next 24 hours\n`);
 
 futureEvents.slice(0, 10).forEach((event, i) => {
@@ -117,8 +132,8 @@ if (futureEvents.length > 10) {
 }
 
 console.log('\n=== Current Actions ===');
-automator.getActions().forEach((action) => {
-  console.log(automator.describeAction(action.id));
+automator.getTasks().forEach((action) => {
+  console.log(automator.describeTask(action.id));
   console.log('---');
 });
 

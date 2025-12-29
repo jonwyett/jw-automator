@@ -22,7 +22,7 @@ if (fs.existsSync(STORAGE_FILE)) {
 
 // Create automator with file-based persistence
 const automator = new Automator({
-  storage: Automator.storage.file(STORAGE_FILE),
+  storageFile: STORAGE_FILE,
   autoSave: true,
   saveInterval: 3000
 });
@@ -49,7 +49,7 @@ automator.addFunction('flexibleTask', function(payload, event) {
 // Listen to events
 automator.on('ready', () => {
   console.log('\n=== Automator Ready ===');
-  console.log(`Actions loaded: ${automator.getActions().length}`);
+  console.log(`Actions loaded: ${automator.getTasks().length}`);
 });
 
 // SEED: Initialize actions (runs only on first use)
@@ -58,7 +58,7 @@ const didSeed = automator.seed((auto) => {
   console.log('Creating initial system tasks...\n');
 
   // Task 1: Critical billing task - NEVER miss an execution
-  auto.addAction({
+  auto.addTask({
     name: 'Billing Task',
     cmd: 'criticalTask',
     date: new Date(Date.now() + 2000),
@@ -72,7 +72,7 @@ const didSeed = automator.seed((auto) => {
   });
 
   // Task 2: Real-time alert - only relevant "now"
-  auto.addAction({
+  auto.addTask({
     name: 'Realtime Alert',
     cmd: 'realtimeAlert',
     date: new Date(Date.now() + 5000),
@@ -86,7 +86,7 @@ const didSeed = automator.seed((auto) => {
   });
 
   // Task 3: Flexible sensor reading - tolerate brief lag
-  auto.addAction({
+  auto.addTask({
     name: 'Sensor Reading',
     cmd: 'flexibleTask',
     date: new Date(Date.now() + 8000),
@@ -109,7 +109,7 @@ if (didSeed) {
 }
 
 console.log('\n=== Current Schedule ===');
-automator.getActions().forEach((action) => {
+automator.getTasks().forEach((action) => {
   console.log(`\n${action.name}:`);
   console.log(`  catchUpWindow: ${action.catchUpWindow === "unlimited" ? '"unlimited"' : action.catchUpWindow + 'ms'}`);
   console.log(`  Next run: ${action.date.toLocaleTimeString()}`);

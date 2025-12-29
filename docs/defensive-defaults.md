@@ -1,8 +1,8 @@
 # Automator Defensive Defaults Strategy
 
-The Automator's design philosophy for handling action specifications is **"Fail loudly, run defensively."**
+The Automator's design philosophy for handling task specifications is **"Fail loudly, run defensively."**
 
-The goal is to maximize system robustness. Rather than rejecting an action with minor errors or missing properties, the Automator will make reasonable, "defensive" assumptions to coerce the action into a valid, runnable state.
+The goal is to maximize system robustness. Rather than rejecting a task with minor errors or missing properties, the Automator will make reasonable, "defensive" assumptions to coerce the task into a valid, runnable state.
 
 However, these corrections are never silent. Whenever a default is applied or a value is coerced due to invalid input, the Automator emits either a `warning` or `debug` event. This ensures that the developer is always aware of any assumptions the system has made on their behalf.
 
@@ -10,14 +10,14 @@ However, these corrections are never silent. Whenever a default is applied or a 
 
 ### Property Default and Coercion Rules
 
-The following rules are applied when an action is added via `addAction()` or updated via `updateAction...()`.
+The following rules are applied when a task is added via `addTask()` or updated via `updateTask...()`.
 
 #### **`cmd`**
-- **Rule:** An action without a command is not runnable.
-- **Behavior:** Throws a hard `Error` if missing. This is the primary exception to the "run defensively" rule, as the action's intent cannot be determined.
+- **Rule:** A task without a command is not runnable.
+- **Behavior:** Throws a hard `Error` if missing. This is the primary exception to the "run defensively" rule, as the task's intent cannot be determined.
 
 #### **`date`** (Start Time)
-- **Rule:** An action needs a starting time.
+- **Rule:** A task needs a starting time.
 - **Default:** If `date` is not provided, it defaults to **5 seconds in the future** from the time it was added.
 - **Event:** `debug`
 
@@ -32,15 +32,15 @@ The following rules are applied when an action is added via `addAction()` or upd
   2.  **Legacy `unBuffered`:** If `catchUpWindow` is absent but the legacy `unBuffered` property is present, it is mapped for backwards compatibility:
       - `unBuffered: true` maps to `catchUpWindow: 0` (no catch-up).
       - `unBuffered: false` maps to `catchUpWindow: "unlimited"`.
-  3.  **Smart Default (Recurring):** If the action has a `repeat` property, `catchUpWindow` defaults to the **duration of the repeat interval** (e.g., an hourly action gets a 1-hour catch-up window).
-  4.  **Smart Default (One-Time):** If the action does not have a `repeat` property, `catchUpWindow` defaults to **`0`** (no catch-up).
+  3.  **Smart Default (Recurring):** If the task has a `repeat` property, `catchUpWindow` defaults to the **duration of the repeat interval** (e.g., an hourly task gets a 1-hour catch-up window).
+  4.  **Smart Default (One-Time):** If the task does not have a `repeat` property, `catchUpWindow` defaults to **`0`** (no catch-up).
 
 ---
 
 ### Recurrence Rules (`repeat.*`)
 
 #### **`repeat.type`**
-- **Rule:** The recurrence `type` is fundamental to the action's behavior and must be a valid string (e.g., 'hour', 'day', 'week').
+- **Rule:** The recurrence `type` is fundamental to the task's behavior and must be a valid string (e.g., 'hour', 'day', 'week').
 - **Behavior:** Throws a hard `Error` if missing or invalid. Unlike other properties, the ambiguity of an invalid type is considered a fatal error, as the user's intent cannot be safely determined.
 
 #### **`repeat.interval`**

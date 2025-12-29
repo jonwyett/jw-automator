@@ -9,7 +9,7 @@ const Automator = require('../index');
 
 // Create automator
 const automator = new Automator({
-  storage: Automator.storage.memory() // Use memory storage for this example
+  // Memory-only mode (no persistence)
 });
 
 // Simulated sensor data
@@ -65,7 +65,7 @@ automator.addFunction('dailyReport', function() {
 // Add sensor reading actions
 
 // 1. Temperature reading every 5 seconds (for 1 minute demo)
-automator.addAction({
+automator.addTask({
   name: 'Temperature Reading',
   cmd: 'readTemperature',
   date: new Date(Date.now() + 2000),
@@ -78,7 +78,7 @@ automator.addAction({
 });
 
 // 2. Humidity reading every 10 seconds
-automator.addAction({
+automator.addTask({
   name: 'Humidity Reading',
   cmd: 'readHumidity',
   date: new Date(Date.now() + 3000),
@@ -91,7 +91,7 @@ automator.addAction({
 });
 
 // 3. Full sensor sweep every 30 seconds
-automator.addAction({
+automator.addTask({
   name: 'Full Sensor Sweep',
   cmd: 'fullSensorSweep',
   date: new Date(Date.now() + 5000),
@@ -108,7 +108,7 @@ const tomorrow6AM = new Date();
 tomorrow6AM.setDate(tomorrow6AM.getDate() + 1);
 tomorrow6AM.setHours(6, 0, 0, 0);
 
-automator.addAction({
+automator.addTask({
   name: 'Daily Report',
   cmd: 'dailyReport',
   date: tomorrow6AM,
@@ -141,7 +141,7 @@ setTimeout(() => {
   automator.stop();
 
   console.log('\nFinal action summary:');
-  automator.getActions().forEach(action => {
+  automator.getTasks().forEach(action => {
     console.log(`- ${action.name}: ${action.count} executions`);
   });
 

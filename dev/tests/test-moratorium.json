@@ -1,0 +1,69 @@
+{
+  "tasks": [
+    {
+      "id": 1,
+      "name": "Test Task 1",
+      "cmd": "testCmd",
+      "payload": {
+        "msg": "Task 1"
+      },
+      "date": "2025-11-25T19:56:29.472Z",
+      "catchUpWindow": 0,
+      "catchUpLimit": 0,
+      "repeat": null,
+      "count": 0
+    },
+    {
+      "id": 3,
+      "name": "CRUD Test 1",
+      "cmd": "testCmd",
+      "payload": {
+        "msg": "CRUD 1"
+      },
+      "date": "2025-11-25T19:56:32.704Z",
+      "catchUpWindow": 0,
+      "catchUpLimit": 0,
+      "repeat": null,
+      "count": 0
+    },
+    {
+      "id": 4,
+      "name": "CRUD Test 2",
+      "cmd": "testCmd",
+      "payload": {
+        "msg": "CRUD 2"
+      },
+      "date": "2025-11-25T19:56:33.813Z",
+      "catchUpWindow": 0,
+      "catchUpLimit": 0,
+      "repeat": null,
+      "count": 0
+    },
+    {
+      "id": 5,
+      "name": "CRUD Test 3",
+      "cmd": "testCmd",
+      "payload": {
+        "msg": "CRUD 3"
+      },
+      "date": "2025-11-25T19:56:34.923Z",
+      "catchUpWindow": 0,
+      "catchUpLimit": 0,
+      "repeat": null,
+      "count": 0
+    },
+    {
+      "id": 6,
+      "name": "Final Task",
+      "cmd": "testCmd",
+      "payload": {
+        "msg": "Final execution"
+      },
+      "date": "2025-11-25T19:55:37.640Z",
+      "catchUpWindow": 0,
+      "catchUpLimit": 0,
+      "repeat": null,
+      "count": 0
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "tasks": [
+    {
+      "id": 1,
+      "name": "Task 1",
+      "cmd": "test",
+      "payload": {},
+      "date": "2025-11-25T20:00:23.806Z",
+      "catchUpWindow": 0,
+      "catchUpLimit": 0,
+      "repeat": null,
+      "count": 0
+    },
+    {
+      "id": 2,
+      "name": "Task 2",
+      "cmd": "test",
+      "payload": {},
+      "date": "2025-11-25T20:00:23.969Z",
+      "catchUpWindow": 0,
+      "catchUpLimit": 0,
+      "repeat": null,
+      "count": 0
+    }
+  ]
+}

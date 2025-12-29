@@ -1,7 +1,7 @@
 {
   "name": "jw-automator",
-  "version": "4.0.1",
-  "description": "A resilient, local-time, 1-second precision automation scheduler for Node.js with smart defensive defaults and clear error handling",
+  "version": "6.0.1",
+  "description": "A resilient, local-time, 1-second precision automation scheduler for Node.js with result-based error handling and defensive defaults",
   "main": "index.js",
   "files": [
     "src/",
